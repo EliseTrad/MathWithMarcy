@@ -1,0 +1,9 @@
+{
+  "dependencies": {
+    "@nestjs/config": "^4.0.2",
+    "@popperjs/core": "^2.11.8",
+    "@types/joi": "^17.2.2",
+    "bootstrap": "^5.3.8",
+    "joi": "^18.0.1"
+  }
+}

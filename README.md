@@ -6,7 +6,7 @@ levels while tracking your progress.
 
 ![MathWithMarcy](./frontend/public/marcy.png)
 
-## eatures
+## Features
 
 - **Practice Math** - Interactive math problems across multiple topics
 - **Track Progress** - Detailed statistics grouped by topic and difficulty
@@ -234,3 +234,4 @@ Created with 💝 for students who want to make math fun!
 ---
 
 **Happy Learning with Marcy!**
+

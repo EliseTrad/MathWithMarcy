@@ -24,12 +24,7 @@ const Register: React.FC = () => {
           <div className="row align-items-center g-5">
             <div className="col-12 col-lg-6 order-2 order-lg-1">
               <RegisterForm
-                onSuccess={({ email }) =>
-                  navigate('/login', {
-                    replace: true,
-                    state: { registered: true, email },
-                  })
-                }
+                onSuccess={() => navigate('/dashboard', { replace: true })}
               />
             </div>
             <div className="col-12 col-lg-6 text-center order-1 order-lg-2">

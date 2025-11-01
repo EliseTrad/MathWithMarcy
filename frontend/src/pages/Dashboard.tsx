@@ -451,7 +451,7 @@ const Dashboard: React.FC = () => {
         />
         <div className="flex-grow-1">
           <strong className="text-danger fs-5">
-            Hi! I'm Marcy —{' '}
+            Heyy I'm Marcy!{' '}
             {statistics && statistics.totalAnswered > 0
               ? encouragement
               : "Let's start practicing some math problems together!"}

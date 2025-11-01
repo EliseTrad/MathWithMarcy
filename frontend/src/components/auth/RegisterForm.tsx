@@ -87,7 +87,8 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
-        autoLogin: false,
+        autoLogin: true,
+        remember: true,
       });
 
       if (!result.success) {

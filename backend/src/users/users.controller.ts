@@ -96,14 +96,19 @@ export class UsersController {
    * Extracts user ID from JWT payload attached to request by AuthGuard.
    */
   private extractUserIdFromRequest(request: Request): number {
-    const user = request.user as Record<string, unknown> | undefined;
+    const user = request.user as Record<string, unknown>;
 
-    const userId =
-      (user?.['user_id'] as number | undefined) ??
-      (user?.['id'] as number | undefined) ??
-      (user?.['sub'] as number | undefined);
+    let userId: number | undefined;
 
-    if (typeof userId !== 'number' || userId <= 0 || !Number.isFinite(userId)) {
+    if ('user_id' in user) {
+      userId = user['user_id'] as number;
+    } else if ('id' in user) {
+      userId = user['id'] as number;
+    } else if ('sub' in user) {
+      userId = user['sub'] as number;
+    }
+
+    if (typeof userId !== 'number' || userId <= 0) {
       throw new UnauthorizedException('Authentication context is invalid.');
     }
 

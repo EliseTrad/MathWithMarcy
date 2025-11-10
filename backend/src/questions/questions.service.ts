@@ -29,10 +29,8 @@ export class QuestionsService {
 
   /** Retrieve all questions. */
   async getAllQuestions(): Promise<Question[]> {
-    console.log('[QUESTIONS] Fetching all questions');
     try {
       const questions = await this.questionsRepo.find();
-      console.log('[QUESTIONS] Fetched count:', questions.length);
       return questions;
     } catch (error) {
       console.error('[QUESTIONS] Error fetching all questions:', error);
@@ -49,28 +47,40 @@ export class QuestionsService {
   async getFilteredQuestions(
     filters: GetQuestionsFilterDto
   ): Promise<Question[]> {
-    console.log('[QUESTIONS] Fetching filtered questions:', filters);
     try {
-      const qb = this.questionsRepo.createQueryBuilder('q');
+      const validTopics = [
+        'Geometry',
+        'Algebra',
+        'Arithmetic',
+        'WordProblem',
+      ] as const;
+      const validDifficulties = ['Easy', 'Medium', 'Hard'] as const;
 
-      if (filters.topic) {
-        qb.andWhere('q.topic = :topic', { topic: filters.topic });
-      }
+      // Only pass valid filters
+      const topicFilter =
+        filters.topic &&
+        validTopics.includes(filters.topic as (typeof validTopics)[number])
+          ? { topic: filters.topic }
+          : {};
+      const difficultyFilter =
+        filters.difficulty &&
+        validDifficulties.includes(
+          filters.difficulty as (typeof validDifficulties)[number]
+        )
+          ? { difficulty: filters.difficulty }
+          : {};
 
-      if (filters.difficulty) {
-        qb.andWhere('q.difficulty = :difficulty', {
-          difficulty: filters.difficulty,
-        });
-      }
+      // Fetch questions
+      let questions = await this.questionsRepo.find({
+        where: { ...topicFilter, ...difficultyFilter },
+        order: { question_id: 'ASC' },
+      });
 
-      // If random is requested, order by random
+      // Randomize if requested
       if (filters.random === 'true') {
-        qb.orderBy('RANDOM()');
-      } else {
-        qb.orderBy('q.question_id', 'ASC');
+        questions = questions.sort(() => Math.random() - 0.5);
       }
 
-      const questions = await qb.getMany();
       console.log('[QUESTIONS] Filtered questions count:', questions.length);
       return questions;
     } catch (error) {
@@ -90,9 +100,6 @@ export class QuestionsService {
     questionId: number,
     dto: SubmitAnswerDto
   ): Promise<{ isCorrect: boolean; correctAnswer: string }> {
-    console.log(
-      `[QUESTIONS] Submitting answer for user ${userId}, question ${questionId}`
-    );
     try {
       // Find the question
       const question = await this.questionsRepo.findOne({
@@ -120,10 +127,6 @@ export class QuestionsService {
 
       await this.userAnswersRepo.save(userAnswerEntity);
 
-      console.log(
-        `[QUESTIONS] Answer submitted. Correct: ${isCorrect}, User: ${userId}, Question: ${questionId}`
-      );
-
       return {
         isCorrect,
         correctAnswer: question.correct_answer,
@@ -139,10 +142,8 @@ export class QuestionsService {
 
   /** Retrieve a single question by its ID. */
   async getQuestionById(id: number): Promise<Question> {
-    console.log('[QUESTIONS] Fetching question by id:', id);
     try {
       if (!Number.isInteger(id) || id <= 0) {
-        console.warn('[QUESTIONS] Invalid id for getQuestionById:', id);
         throw new BadRequestException('Invalid question id.');
       }
       const question = await this.questionsRepo.findOne({
@@ -170,10 +171,6 @@ export class QuestionsService {
 
   /** Create a new question. */
   async createQuestion(dto: CreateQuestionDto): Promise<Question> {
-    console.log('[QUESTIONS] Creating question:', {
-      topic: dto.topic,
-      difficulty: dto.difficulty,
-    });
     try {
       const entity = this.questionsRepo.create({
         topic: dto.topic,
@@ -184,7 +181,6 @@ export class QuestionsService {
       });
 
       const saved = await this.questionsRepo.save(entity);
-      console.log('[QUESTIONS] Question created with id:', saved.question_id);
       return saved;
     } catch (error) {
       console.error('[QUESTIONS] Error creating question:', error);
@@ -197,15 +193,8 @@ export class QuestionsService {
 
   /** Update an existing question by ID. */
   async updateQuestion(id: number, dto: UpdateQuestionDto): Promise<Question> {
-    console.log(
-      '[QUESTIONS] Updating question id:',
-      id,
-      'with payload keys:',
-      Object.keys(dto || {})
-    );
     try {
       if (!Number.isInteger(id) || id <= 0) {
-        console.warn('[QUESTIONS] Invalid id for updateQuestion:', id);
         throw new BadRequestException('Invalid question id.');
       }
       const existing = await this.questionsRepo.findOne({

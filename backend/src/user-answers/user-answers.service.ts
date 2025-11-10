@@ -31,6 +31,11 @@ export class UserAnswersService {
   /**
    * Retrieve a user's answers with optional topic and difficulty filters.
    * Returns a projection suitable for dashboards.
+   *
+   * @param userId - The ID of the user whose answers to retrieve
+   * @param filters - Optional filters for topic and difficulty
+   * @returns Promise that resolves to array of user answer projections with question details
+   * @throws InternalServerErrorException for database errors
    */
   async getUserAnswers(
     userId: number,
@@ -45,53 +50,60 @@ export class UserAnswersService {
     }>
   > {
     try {
-      const qb = this.userAnswersRepo
-        .createQueryBuilder('ua')
-        .innerJoin('ua.user', 'u')
-        .innerJoin('ua.question', 'q')
-        .where('u.user_id = :userId', { userId });
+      let whereCondition: any = { user: { user_id: userId } };
 
-      if (filters?.topic) {
-        qb.andWhere('q.topic = :topic', { topic: filters.topic });
+      if (filters && filters.topic) {
+        whereCondition.question = whereCondition.question || {};
+        whereCondition.question.topic = filters.topic;
       }
 
-      if (filters?.difficulty) {
-        qb.andWhere('q.difficulty = :difficulty', {
-          difficulty: filters.difficulty,
+      if (filters && filters.difficulty) {
+        whereCondition.question = whereCondition.question || {};
+        whereCondition.question.difficulty = filters.difficulty;
+      }
+
+      const answers = await this.userAnswersRepo.find({
+        where: whereCondition,
+        relations: ['user', 'question'],
+        order: { answer_id: 'DESC' },
+      });
+
+      const result: Array<{
+        questionText: string;
+        topic: string;
+        difficulty: string;
+        userAnswer: string;
+        isCorrect: boolean;
+      }> = [];
+
+      for (const ua of answers) {
+        result.push({
+          questionText: ua.question.question_text,
+          topic: ua.question.topic,
+          difficulty: ua.question.difficulty,
+          userAnswer: ua.user_answer,
+          isCorrect: ua.is_correct,
         });
       }
 
-      const rows = await qb
-        .select([
-          'q.question_text AS questionText',
-          'q.topic AS topic',
-          'q.difficulty AS difficulty',
-          'ua.user_answer AS userAnswer',
-          'ua.is_correct AS isCorrect',
-        ])
-        .orderBy('ua.answer_id', 'DESC')
-        .getRawMany<{
-          questionText: string;
-          topic: string;
-          difficulty: string;
-          userAnswer: string;
-          isCorrect: boolean;
-        }>();
-
-      return rows;
+      return result;
     } catch (error) {
-      console.error('[USER_ANSWERS] Error filtering user answers:', error);
+      console.error('[USER_ANSWERS] Error fetching user answers:', error);
       throw new InternalServerErrorException('Failed to fetch answers');
     }
   }
 
+  /**
+   * Retrieves all user answers from the database.
+   *
+   * @returns Promise that resolves to array of all UserAnswer entities with relations
+   * @throws InternalServerErrorException for database errors
+   */
   async getAllUserAnswers(): Promise<UserAnswer[]> {
-    console.log('[USER_ANSWERS] Fetching all user answers');
     try {
       const items = await this.userAnswersRepo.find({
         relations: ['user', 'question'],
       });
-      console.log('[USER_ANSWERS] fetched:', items.length);
       return items;
     } catch (error) {
       console.error('[USER_ANSWERS] Error fetching all:', error);
@@ -101,15 +113,21 @@ export class UserAnswersService {
     }
   }
 
+  /**
+   * Retrieves a single user answer by its ID.
+   *
+   * @param id - The answer ID to lookup
+   * @returns Promise that resolves to UserAnswer entity with relations
+   * @throws NotFoundException if user answer doesn't exist
+   * @throws InternalServerErrorException for database errors
+   */
   async getUserAnswerById(id: number): Promise<UserAnswer> {
-    console.log('[USER_ANSWERS] Fetching by id:', id);
     try {
       const item = await this.userAnswersRepo.findOne({
         where: { answer_id: id },
         relations: ['user', 'question'],
       });
       if (!item) {
-        console.warn('[USER_ANSWERS] Not found id:', id);
         throw new NotFoundException('User answer not found.');
       }
       return item;
@@ -122,46 +140,49 @@ export class UserAnswersService {
     }
   }
 
+  /**
+   * Creates a new user answer record.
+   *
+   * @param dto - Data transfer object containing user answer details
+   * @returns Promise that resolves to the created UserAnswer entity
+   * @throws InternalServerErrorException for database errors
+   */
   async createUserAnswer(dto: CreateUserAnswerDto): Promise<UserAnswer> {
-    console.log(
-      '[USER_ANSWERS] Creating answer for user:',
-      dto.user_id,
-      'question:',
-      dto.question_id
-    );
     try {
-      const entity: Partial<UserAnswer> = this.userAnswersRepo.create({
-        user_answer: dto.user_answer ?? '',
-        is_correct: dto.is_correct ?? false,
+      const entity = this.userAnswersRepo.create({
+        user_answer: dto.user_answer || '',
+        is_correct: dto.is_correct || false,
+        user: { user_id: dto.user_id } as any,
+        question: { question_id: dto.question_id } as any,
       });
 
-      // Set relation placeholders by id so TypeORM can resolve/attach them
-      (entity as any).user = { user_id: dto.user_id };
-      (entity as any).question = { question_id: dto.question_id };
-
-      const saved = await this.userAnswersRepo.save(entity as UserAnswer);
-      console.log(
-        '[USER_ANSWERS] Created id:',
-        (saved as UserAnswer).answer_id
-      );
-      return saved as UserAnswer;
+      const saved = await this.userAnswersRepo.save(entity);
+      console.log('[USER_ANSWERS] Created id:', saved.answer_id);
+      return saved;
     } catch (error) {
       console.error('[USER_ANSWERS] Error creating:', error);
       throw new InternalServerErrorException('Unable to create user answer.');
     }
   }
 
+  /**
+   * Updates an existing user answer record.
+   *
+   * @param id - The answer ID to update
+   * @param dto - Data transfer object containing fields to update
+   * @returns Promise that resolves to the updated UserAnswer entity
+   * @throws NotFoundException if user answer doesn't exist
+   * @throws InternalServerErrorException for database errors
+   */
   async updateUserAnswer(
     id: number,
     dto: UpdateUserAnswerDto
   ): Promise<UserAnswer> {
-    console.log('[USER_ANSWERS] Updating id:', id);
     try {
       const existing = await this.userAnswersRepo.findOne({
         where: { answer_id: id },
       });
       if (!existing) {
-        console.warn('[USER_ANSWERS] Not found for update id:', id);
         throw new NotFoundException('User answer not found.');
       }
 
@@ -182,14 +203,20 @@ export class UserAnswersService {
     }
   }
 
+  /**
+   * Deletes a user answer record.
+   *
+   * @param id - The answer ID to delete
+   * @returns Promise that resolves when the answer is successfully deleted
+   * @throws NotFoundException if user answer doesn't exist
+   * @throws InternalServerErrorException for database errors
+   */
   async deleteUserAnswer(id: number): Promise<void> {
-    console.log('[USER_ANSWERS] Deleting id:', id);
     try {
       const existing = await this.userAnswersRepo.findOne({
         where: { answer_id: id },
       });
       if (!existing) {
-        console.warn('[USER_ANSWERS] Not found for delete id:', id);
         throw new NotFoundException('User answer not found.');
       }
 
@@ -203,25 +230,20 @@ export class UserAnswersService {
   }
 
   /**
-   * Get comprehensive statistics for a user
+   * Get comprehensive statistics for a user.
+   * Calculates overall accuracy, topic-wise performance, and difficulty-wise breakdown.
+   *
+   * @param userId - The ID of the user to get statistics for
+   * @returns Promise that resolves to UserStatisticsDto with comprehensive stats
+   * @throws InternalServerErrorException for database errors
    */
   async getUserStatistics(userId: number): Promise<UserStatisticsDto> {
-    console.log('[USER_ANSWERS] Fetching statistics for user:', userId);
-
     try {
-      // Fetch all user answers with related question data
-      const userAnswers = await this.userAnswersRepo
-        .createQueryBuilder('ua')
-        .leftJoinAndSelect('ua.question', 'q')
-        .where('ua.user.user_id = :userId', { userId })
-        .getMany();
-
-      console.log(
-        '[USER_ANSWERS] Found',
-        userAnswers.length,
-        'answers for user:',
-        userId
-      );
+      // Fetch all user answers with their related question
+      const userAnswers = await this.userAnswersRepo.find({
+        where: { user: { user_id: userId } },
+        relations: ['question'],
+      });
 
       // If no answers, return zero stats
       if (userAnswers.length === 0) {
@@ -251,9 +273,9 @@ export class UserAnswersService {
         hard: { answered: 0, correct: 0 },
       };
 
-      // Process each answer
-      userAnswers.forEach((answer) => {
-        if (!answer.question) return;
+      // Go through each answer and update stats
+      for (const answer of userAnswers) {
+        if (!answer.question) continue;
 
         const topic = this.normalizeTopicKey(answer.question.topic);
         const difficulty = this.normalizeDifficultyKey(
@@ -266,9 +288,10 @@ export class UserAnswersService {
           topicsData[topic].answered++;
           if (isCorrect) topicsData[topic].correct++;
 
-          // Update topic difficulty breakdown
+          // Update topic's difficulty breakdown safely
           const difficultyBreakdown = topicsData[topic]
             .byDifficulty as unknown as Record<string, DifficultyStats>;
+
           if (difficultyBreakdown[difficulty]) {
             difficultyBreakdown[difficulty].answered++;
             if (isCorrect) difficultyBreakdown[difficulty].correct++;
@@ -280,14 +303,9 @@ export class UserAnswersService {
           difficultiesData[difficulty].answered++;
           if (isCorrect) difficultiesData[difficulty].correct++;
         }
-      });
+      }
 
-      console.log('[USER_ANSWERS] Calculated stats:', {
-        totalAnswered,
-        correctAnswers,
-        accuracy,
-      });
-
+      // Return the final structured stats
       return {
         totalAnswered,
         correctAnswers,
@@ -313,7 +331,10 @@ export class UserAnswersService {
   }
 
   /**
-   * Helper: Return empty statistics structure
+   * Helper method that returns an empty statistics structure.
+   * Used when a user has no answered questions yet.
+   *
+   * @returns UserStatisticsDto with all values set to zero
    */
   private getEmptyStatistics(): UserStatisticsDto {
     return {
@@ -335,7 +356,10 @@ export class UserAnswersService {
   }
 
   /**
-   * Helper: Return empty topic stats
+   * Helper method that returns an empty topic statistics structure.
+   * Initializes all difficulty levels with zero values.
+   *
+   * @returns TopicStats with all counters set to zero
    */
   private getEmptyTopicStats(): TopicStats {
     return {
@@ -350,7 +374,11 @@ export class UserAnswersService {
   }
 
   /**
-   * Helper: Normalize topic name to camelCase key
+   * Helper method that normalizes topic names to camelCase keys.
+   * Maps display names to consistent object property names.
+   *
+   * @param topic - The topic name from the database (e.g., "Word Problem")
+   * @returns Normalized camelCase key (e.g., "wordProblem")
    */
   private normalizeTopicKey(topic: string): string {
     const topicMap: Record<string, string> = {
@@ -363,7 +391,11 @@ export class UserAnswersService {
   }
 
   /**
-   * Helper: Normalize difficulty to lowercase key
+   * Helper method that normalizes difficulty names to lowercase keys.
+   * Ensures consistent difficulty level keys regardless of input casing.
+   *
+   * @param difficulty - The difficulty level from the database (e.g., "Easy", "MEDIUM")
+   * @returns Lowercase normalized key (e.g., "easy", "medium")
    */
   private normalizeDifficultyKey(difficulty: string): string {
     return difficulty.toLowerCase();

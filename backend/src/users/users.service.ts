@@ -34,16 +34,11 @@ export class UsersService {
    * Business logic: checks for duplicate emails and hashes passwords.
    *
    * @param createUserDto - Validated user creation data (validation happens in DTO)
-   * @returns Sanitized user object without password
+   * @returns Promise that resolves to sanitized user object without password
    * @throws BadRequestException if email already exists
    * @throws InternalServerErrorException for database errors
    */
   async createUser(createUserDto: CreateUserDto): Promise<SanitizedUser> {
-    console.log('[USERS] Creating user:', {
-      name: createUserDto.name,
-      email: createUserDto.email,
-    });
-
     try {
       // Business logic: Check for duplicate email
       const existingUser = await this.usersRepository.findOne({
@@ -88,18 +83,18 @@ export class UsersService {
   /**
    * Retrieves all users from the database.
    *
-   * @returns Array of sanitized user objects
+   * @returns Promise that resolves to array of sanitized user objects
    * @throws InternalServerErrorException for database errors
    */
   async getAllUsers(): Promise<SanitizedUser[]> {
     try {
       const users = await this.usersRepository.find();
-      return users.map((user) => this.sanitizeUser(user));
+      const sanitizedUsers = [];
+      for (const user of users) {
+        sanitizedUsers.push(this.sanitizeUser(user));
+      }
+      return sanitizedUsers;
     } catch (error) {
-      console.error('[USERS] getAllUsers failed:', {
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
       throw new InternalServerErrorException(
         'Unable to retrieve users at this time.'
       );
@@ -110,7 +105,7 @@ export class UsersService {
    * Retrieves a single user by ID.
    *
    * @param userId - User ID to lookup
-   * @returns Sanitized user object
+   * @returns Promise that resolves to sanitized user object
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
@@ -132,11 +127,6 @@ export class UsersService {
         throw error;
       }
 
-      console.error('[USERS] getUserById failed:', {
-        userId,
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
       throw new InternalServerErrorException(
         'Unable to retrieve the requested user.'
       );
@@ -149,7 +139,7 @@ export class UsersService {
    *
    * @param userId - User ID to update
    * @param updateUserDto - Validated update data (validation happens in DTO)
-   * @returns Updated sanitized user object
+   * @returns Promise that resolves to updated sanitized user object
    * @throws BadRequestException if email already in use by another user
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
@@ -177,10 +167,6 @@ export class UsersService {
         });
 
         if (emailOwner && emailOwner.user_id !== userId) {
-          console.error('[USERS] updateUser - email conflict:', {
-            userId,
-            attemptedEmail: updateUserDto.email,
-          });
           throw new BadRequestException(
             'Email is already registered to another account.'
           );
@@ -211,16 +197,8 @@ export class UsersService {
         // Expected validation error
         throw error;
       }
+      console.error(error);
 
-      console.error('[USERS] updateUser failed:', {
-        userId,
-        payload: {
-          name: updateUserDto?.name,
-          email: updateUserDto?.email,
-        },
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
       throw new InternalServerErrorException(
         'Unable to update user information.'
       );
@@ -233,6 +211,7 @@ export class UsersService {
    *
    * @param userId - User ID
    * @param changePasswordDto - Validated password data (validation happens in DTO)
+   * @returns Promise that resolves when password is successfully changed
    * @throws UnauthorizedException if current password is incorrect
    * @throws BadRequestException if new password matches current password
    * @throws NotFoundException if user doesn't exist
@@ -297,11 +276,7 @@ export class UsersService {
         throw error;
       }
 
-      console.error('[USERS] changePassword failed:', {
-        userId,
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
+      console.error(error);
       throw new InternalServerErrorException(
         'Unable to change password at this time.'
       );
@@ -312,6 +287,7 @@ export class UsersService {
    * Deletes a user account.
    *
    * @param userId - User ID to delete
+   * @returns Promise that resolves when user is successfully deleted
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
@@ -333,11 +309,7 @@ export class UsersService {
         throw error;
       }
 
-      console.error('[USERS] deleteUser failed:', {
-        userId,
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
+      console.error(error);
       throw new InternalServerErrorException(
         'Unable to delete user at this time.'
       );
@@ -349,7 +321,7 @@ export class UsersService {
    * Used internally for authentication workflows.
    *
    * @param email - Email address to lookup
-   * @returns User entity with password, or null if not found
+   * @returns Promise that resolves to user entity with password, or null if not found
    * @throws InternalServerErrorException for database errors
    */
   async findUserByEmail(email: string): Promise<User | null> {
@@ -366,11 +338,7 @@ export class UsersService {
 
       return user ?? null;
     } catch (error) {
-      console.error('[USERS] findUserByEmail failed:', {
-        email: normalizedEmail,
-        errorMessage: (error as Error)?.message,
-        stack: (error as Error)?.stack,
-      });
+      console.error(error);
       throw new InternalServerErrorException('Unable to lookup user by email.');
     }
   }

@@ -27,7 +27,14 @@ export class QuestionsService {
     private readonly userAnswersRepo: Repository<UserAnswer>
   ) {}
 
-  /** Retrieve all questions. */
+  /**
+   * Retrieves all questions from the database without any filtering or ordering.
+   *
+   * Business logic: Simple data retrieval operation for administrative or bulk operations.
+   *
+   * @returns {Promise<Question[]>} Array of all questions in the database
+   * @throws {InternalServerErrorException} When database operation fails
+   */
   async getAllQuestions(): Promise<Question[]> {
     try {
       const questions = await this.questionsRepo.find();
@@ -41,8 +48,16 @@ export class QuestionsService {
   }
 
   /**
-   * Retrieve questions with optional filtering by topic and difficulty.
-   * Optionally return random questions.
+   * Retrieves questions with optional filtering by topic and difficulty, with support for randomization.
+   *
+   * Business logic: Validates filter criteria against predefined valid values and applies randomization when requested.
+   *
+   * @param {GetQuestionsFilterDto} filters - Filter criteria including topic, difficulty, and random flag
+   * @param {string} [filters.topic] - Question topic (Geometry, Algebra, Arithmetic, WordProblem)
+   * @param {string} [filters.difficulty] - Question difficulty (Easy, Medium, Hard)
+   * @param {string} [filters.random] - Whether to randomize results ('true' for random order)
+   * @returns {Promise<Question[]>} Array of filtered questions, optionally in random order
+   * @throws {InternalServerErrorException} When database operation fails or filter validation errors occur
    */
   async getFilteredQuestions(
     filters: GetQuestionsFilterDto
@@ -92,8 +107,18 @@ export class QuestionsService {
   }
 
   /**
-   * Submit an answer to a question.
-   * Stores the answer and returns whether it was correct.
+   * Processes a user's answer submission for a specific question and records the result.
+   *
+   * Business logic: Performs case-insensitive answer comparison, creates user answer record,
+   * and establishes foreign key relationships with user and question entities.
+   *
+   * @param {number} userId - ID of the user submitting the answer
+   * @param {number} questionId - ID of the question being answered
+   * @param {SubmitAnswerDto} dto - Answer submission data
+   * @param {string} dto.userAnswer - The user's submitted answer
+   * @returns {Promise<{isCorrect: boolean; correctAnswer: string}>} Result object containing correctness status and the correct answer
+   * @throws {NotFoundException} When the specified question doesn't exist
+   * @throws {InternalServerErrorException} When database operations fail
    */
   async submitAnswer(
     userId: number,
@@ -140,7 +165,17 @@ export class QuestionsService {
     }
   }
 
-  /** Retrieve a single question by its ID. */
+  /**
+   * Retrieves a single question by its unique identifier.
+   *
+   * Business logic: Validates question ID format and ensures question exists before returning.
+   *
+   * @param {number} id - The unique identifier of the question to retrieve
+   * @returns {Promise<Question>} The requested question entity
+   * @throws {BadRequestException} When the provided ID is invalid (non-integer or <= 0)
+   * @throws {NotFoundException} When no question exists with the specified ID
+   * @throws {InternalServerErrorException} When database operation fails
+   */
   async getQuestionById(id: number): Promise<Question> {
     try {
       if (!Number.isInteger(id) || id <= 0) {
@@ -169,7 +204,21 @@ export class QuestionsService {
     }
   }
 
-  /** Create a new question. */
+  /**
+   * Creates a new question in the database with the provided data.
+   *
+   * Business logic: Creates question entity from DTO data, handling optional hint field.
+   * Input validation is performed at the DTO level.
+   *
+   * @param {CreateQuestionDto} dto - Question creation data
+   * @param {string} dto.topic - Question topic category
+   * @param {string} dto.difficulty - Question difficulty level
+   * @param {string} dto.question_text - The question content/text
+   * @param {string} dto.correct_answer - The correct answer for the question
+   * @param {string} [dto.hint] - Optional hint for the question
+   * @returns {Promise<Question>} The newly created question entity with generated ID
+   * @throws {InternalServerErrorException} When database operation fails or question creation is unsuccessful
+   */
   async createQuestion(dto: CreateQuestionDto): Promise<Question> {
     try {
       const entity = this.questionsRepo.create({
@@ -191,7 +240,24 @@ export class QuestionsService {
     }
   }
 
-  /** Update an existing question by ID. */
+  /**
+   * Updates an existing question with new data, merging only provided fields.
+   *
+   * Business logic: Validates question ID, verifies question exists, and performs partial updates
+   * by merging only the fields provided in the DTO while preserving existing values for omitted fields.
+   *
+   * @param {number} id - The unique identifier of the question to update
+   * @param {UpdateQuestionDto} dto - Partial question update data
+   * @param {string} [dto.topic] - Updated question topic category
+   * @param {string} [dto.difficulty] - Updated question difficulty level
+   * @param {string} [dto.question_text] - Updated question content/text
+   * @param {string} [dto.correct_answer] - Updated correct answer
+   * @param {string} [dto.hint] - Updated hint (can be set to null)
+   * @returns {Promise<Question>} The updated question entity
+   * @throws {BadRequestException} When the provided ID is invalid (non-integer or <= 0)
+   * @throws {NotFoundException} When no question exists with the specified ID
+   * @throws {InternalServerErrorException} When database operation fails
+   */
   async updateQuestion(id: number, dto: UpdateQuestionDto): Promise<Question> {
     try {
       if (!Number.isInteger(id) || id <= 0) {
@@ -229,7 +295,18 @@ export class QuestionsService {
     }
   }
 
-  /** Delete a question by ID. */
+  /**
+   * Permanently removes a question from the database by its unique identifier.
+   *
+   * Business logic: Validates question ID format, verifies question exists before deletion,
+   * and performs hard delete from the database. Related user answers may be affected by cascading rules.
+   *
+   * @param {number} id - The unique identifier of the question to delete
+   * @returns {Promise<void>} Resolves when deletion is complete
+   * @throws {BadRequestException} When the provided ID is invalid (non-integer or <= 0)
+   * @throws {NotFoundException} When no question exists with the specified ID
+   * @throws {InternalServerErrorException} When database operation fails
+   */
   async deleteQuestion(id: number): Promise<void> {
     console.log('[QUESTIONS] Deleting question id:', id);
     try {

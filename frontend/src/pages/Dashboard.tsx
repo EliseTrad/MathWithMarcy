@@ -87,7 +87,7 @@ const Dashboard: React.FC = () => {
       {/* Header */}
       <div className="mb-4">
         <h2 className="h3 fw-bold text-danger mb-1">
-          Welcome back, {user.name}!
+          Welcome, {user.name}!
         </h2>
         <p className="text-danger-emphasis mb-0">
           Here's your progress overview

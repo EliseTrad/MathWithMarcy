@@ -161,7 +161,7 @@ const Profile: React.FC = () => {
                         setEditing((s) => ({ ...s, name: !s.name }))
                       }
                     >
-                      ✏️
+                      🖍
                     </button>
                   </div>
                 </div>
@@ -181,7 +181,7 @@ const Profile: React.FC = () => {
                         setEditing((s) => ({ ...s, email: !s.email }))
                       }
                     >
-                      ✏️
+                      🖍
                     </button>
                   </div>
                 </div>
@@ -198,7 +198,7 @@ const Profile: React.FC = () => {
                       className="btn btn-outline-secondary"
                       onClick={() => setPasswordFlowOpen(true)}
                     >
-                      ✏️
+                      🖍
                     </button>
                   </div>
                 </div>

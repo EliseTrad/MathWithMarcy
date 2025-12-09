@@ -1,19 +1,36 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   Index,
   JoinColumn,
   ManyToOne,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { Question } from '../questions/question.entity';
 import { User } from '../users/user.entity';
 
 /**
- * Structural mapping for the `user_answers` table.
- * Pure entity definition — no business logic.
+ * UserAnswer entity representing the `user_answers` table.
+ *
+ * Database Design:
+ * - Primary Key: answer_id (auto-increment)
+ * - Foreign Keys: user_id → users.user_id, question_id → questions.question_id
+ * - Indexes: user_id, question_id, is_correct, composite (user_id, created_at)
+ * - Constraints: NOT NULL on all required fields, CASCADE DELETE on foreign keys
+ * - Audit Fields: created_at, updated_at
+ *
+ * Business Logic Enforced at Database Level:
+ * - Foreign key constraints ensure referential integrity
+ * - Cascade delete maintains data consistency when users/questions are deleted
+ * - Indexes optimize queries for user statistics and answer history
+ * - Composite index (user_id, created_at) optimizes chronological answer retrieval
+ * - Boolean default (false) ensures is_correct always has a value
  */
 @Entity({ name: 'user_answers' })
+@Index('idx_user_answers_user_created', ['user', 'created_at'])
+@Index('idx_user_answers_is_correct', ['is_correct'])
 export class UserAnswer {
   /** Primary key: answer_id */
   @PrimaryGeneratedColumn({ name: 'answer_id', type: 'integer' })
@@ -54,4 +71,18 @@ export class UserAnswer {
     default: false,
   })
   public is_correct!: boolean;
+
+  /**
+   * Timestamp when the answer was submitted.
+   * Critical for tracking user progress and performance over time.
+   */
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  public created_at!: Date;
+
+  /**
+   * Timestamp when the answer was last updated.
+   * Tracks modifications to submitted answers (if allowed).
+   */
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  public updated_at!: Date;
 }

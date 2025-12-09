@@ -1,27 +1,37 @@
 import React, { useState } from 'react';
 import { Navigate, Link, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
-import api from '../api/api';
-
-type Alert = { type: 'success' | 'danger'; message: string } | null;
+import { useAppSelector, useAppDispatch } from '../store';
+import { logout, setUser } from '../store/slices/authSlice';
+import {
+  setProfileEditing,
+  setProfileSaving,
+  setShowDeleteConfirm,
+  setPasswordFlowOpen,
+  setProfileAlert,
+  resetProfileForm,
+} from '../store/slices/formSlice';
+import apolloClient from '../graphql/client';
+import {
+  UPDATE_USER_MUTATION,
+  CHANGE_PASSWORD_MUTATION,
+  DELETE_USER_MUTATION,
+  type UpdateUserResponse,
+  type ChangePasswordResponse,
+  type DeleteUserResponse,
+} from '../graphql/operations';
 
 /**
  * Profile page shows basic account details for the logged-in user.
  * Redirects to /login if not authenticated.
  */
 const Profile: React.FC = () => {
-  const { isAuthenticated, user, logout } = useAuth();
-
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const { editing, isSaving, showDeleteConfirm, passwordFlowOpen, alert } =
+    useAppSelector((state) => state.form.profile);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  // initialize local state before any early returns to satisfy Hooks rules
-  const [isSaving, setIsSaving] = useState<boolean>(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState<boolean>(false);
-  const [passwordFlowOpen, setPasswordFlowOpen] = useState<boolean>(false);
-  const [alert, setAlert] = useState<Alert>(null);
-  const [editing, setEditing] = useState<{ name?: boolean; email?: boolean }>(
-    {}
-  );
+  // Local state for form fields only
   const [name, setName] = useState<string>(user?.name ?? '');
   const [email, setEmail] = useState<string>(user?.email ?? '');
 
@@ -30,8 +40,8 @@ const Profile: React.FC = () => {
   }
 
   const saveProfile = async () => {
-    setIsSaving(true);
-    setAlert(null);
+    dispatch(setProfileSaving(true));
+    dispatch(setProfileAlert(null));
     try {
       const payload: Partial<{ name: string; email: string }> = {};
       if (name.trim() !== user.name) payload.name = name.trim();
@@ -39,36 +49,51 @@ const Profile: React.FC = () => {
         payload.email = email.trim().toLowerCase();
 
       if (Object.keys(payload).length === 0) {
-        setAlert({ type: 'success', message: 'No changes to save.' });
-        setIsSaving(false);
-        setEditing({});
+        dispatch(
+          setProfileAlert({ type: 'success', message: 'No changes to save.' })
+        );
+        dispatch(setProfileSaving(false));
+        dispatch(setProfileEditing({}));
         return;
       }
 
-      const res = await api.patch('/users', payload);
-      // Update persisted user in storage so AuthContext pick up on refresh
-      const nextUser = { ...user, ...res.data.user };
-      try {
-        localStorage.setItem('mathWithMarcy.user', JSON.stringify(nextUser));
-        sessionStorage.setItem('mathWithMarcy.user', JSON.stringify(nextUser));
-      } catch {
-        // ignore storage errors
+      const result = await apolloClient.mutate<UpdateUserResponse>({
+        mutation: UPDATE_USER_MUTATION,
+        variables: payload,
+      });
+
+      if (!result.data) {
+        throw new Error('Failed to update profile');
       }
 
-      setAlert({ type: 'success', message: 'Profile updated successfully.' });
-      setEditing({});
-      // reload to refresh AuthContext state
-      setTimeout(() => window.location.reload(), 600);
+      const nextUser = {
+        user_id: result.data.updateUser.user_id,
+        name: result.data.updateUser.name,
+        email: result.data.updateUser.email,
+      };
+
+      // Update Redux state
+      dispatch(setUser(nextUser));
+
+      dispatch(
+        setProfileAlert({
+          type: 'success',
+          message: 'Profile updated successfully.',
+        })
+      );
+      dispatch(setProfileEditing({}));
     } catch (err) {
       // Try to render a friendly message
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resp = (err as any)?.response;
-      setAlert({
-        type: 'danger',
-        message: resp?.data?.message ?? 'Failed to update profile.',
-      });
+      const errorMessage = (err as any)?.message ?? 'Failed to update profile.';
+      dispatch(
+        setProfileAlert({
+          type: 'error',
+          message: errorMessage,
+        })
+      );
     } finally {
-      setIsSaving(false);
+      dispatch(setProfileSaving(false));
     }
   };
 
@@ -76,44 +101,50 @@ const Profile: React.FC = () => {
     currentPassword: string,
     newPassword: string
   ) => {
-    setIsSaving(true);
+    dispatch(setProfileSaving(true));
     try {
-      await api.patch('/users/password', {
-        currentPassword,
-        newPassword,
+      const result = await apolloClient.mutate<ChangePasswordResponse>({
+        mutation: CHANGE_PASSWORD_MUTATION,
+        variables: {
+          currentPassword,
+          newPassword,
+        },
       });
-      setAlert({ type: 'success', message: 'Password updated successfully.' });
-      setPasswordFlowOpen(false);
+
+      if (!result.data?.changePassword) {
+        throw new Error('Failed to change password');
+      }
+
+      dispatch(
+        setProfileAlert({
+          type: 'success',
+          message: 'Password updated successfully.',
+        })
+      );
+      dispatch(setPasswordFlowOpen(false));
       return { success: true };
     } catch (err) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const resp = (err as any)?.response;
-      const errorMessage = resp?.data?.message ?? 'Failed to change password.';
+      const errorMessage =
+        (err as Error)?.message ?? 'Failed to change password.';
       return { success: false, error: errorMessage };
     } finally {
-      setIsSaving(false);
+      dispatch(setProfileSaving(false));
     }
   };
 
   const deleteAccount = async () => {
-    setIsSaving(true);
+    dispatch(setProfileSaving(true));
     try {
-      await api.delete('/users');
-      // Ensure sign-out and redirect
-      try {
-        localStorage.removeItem('mathWithMarcy.user');
-        sessionStorage.removeItem('mathWithMarcy.user');
-        localStorage.removeItem('mathWithMarcy.token');
-        sessionStorage.removeItem('mathWithMarcy.token');
-      } catch {
-        // ignore
-      }
-      // call logout from context to clean up
-      logout();
+      await apolloClient.mutate<DeleteUserResponse>({
+        mutation: DELETE_USER_MUTATION,
+      });
+      // Logout user after account deletion
+      dispatch(logout());
+      dispatch(resetProfileForm());
     } catch {
       // Error deleting account - user will be redirected regardless
     } finally {
-      setIsSaving(false);
+      dispatch(setProfileSaving(false));
       navigate('/login', { replace: true });
     }
   };
@@ -138,7 +169,7 @@ const Profile: React.FC = () => {
                 {alert && (
                   <div
                     className={`alert alert-${
-                      alert.type === 'danger' ? 'danger' : 'success'
+                      alert.type === 'error' ? 'danger' : alert.type
                     }`}
                     role="alert"
                   >
@@ -158,7 +189,9 @@ const Profile: React.FC = () => {
                     <button
                       className="btn btn-outline-secondary"
                       onClick={() =>
-                        setEditing((s) => ({ ...s, name: !s.name }))
+                        dispatch(
+                          setProfileEditing({ ...editing, name: !editing.name })
+                        )
                       }
                     >
                       🖍
@@ -178,7 +211,12 @@ const Profile: React.FC = () => {
                     <button
                       className="btn btn-outline-secondary"
                       onClick={() =>
-                        setEditing((s) => ({ ...s, email: !s.email }))
+                        dispatch(
+                          setProfileEditing({
+                            ...editing,
+                            email: !editing.email,
+                          })
+                        )
                       }
                     >
                       🖍
@@ -196,7 +234,7 @@ const Profile: React.FC = () => {
                     />
                     <button
                       className="btn btn-outline-secondary"
-                      onClick={() => setPasswordFlowOpen(true)}
+                      onClick={() => dispatch(setPasswordFlowOpen(true))}
                     >
                       🖍
                     </button>
@@ -216,7 +254,7 @@ const Profile: React.FC = () => {
                     onClick={() => {
                       setName(user.name);
                       setEmail(user.email);
-                      setEditing({});
+                      dispatch(setProfileEditing({}));
                     }}
                     disabled={isSaving}
                   >
@@ -229,7 +267,7 @@ const Profile: React.FC = () => {
                 <div className="text-center">
                   <button
                     className="btn btn-danger btn-sm"
-                    onClick={() => setShowDeleteConfirm(true)}
+                    onClick={() => dispatch(setShowDeleteConfirm(true))}
                   >
                     Delete Account
                   </button>
@@ -254,7 +292,9 @@ const Profile: React.FC = () => {
                           <button
                             type="button"
                             className="btn-close"
-                            onClick={() => setShowDeleteConfirm(false)}
+                            onClick={() =>
+                              dispatch(setShowDeleteConfirm(false))
+                            }
                           />
                         </div>
                         <div className="modal-body">
@@ -267,7 +307,9 @@ const Profile: React.FC = () => {
                           <button
                             type="button"
                             className="btn btn-secondary"
-                            onClick={() => setShowDeleteConfirm(false)}
+                            onClick={() =>
+                              dispatch(setShowDeleteConfirm(false))
+                            }
                           >
                             Cancel
                           </button>
@@ -275,7 +317,7 @@ const Profile: React.FC = () => {
                             type="button"
                             className="btn btn-danger"
                             onClick={() => {
-                              setShowDeleteConfirm(false);
+                              dispatch(setShowDeleteConfirm(false));
                               deleteAccount();
                             }}
                             disabled={isSaving}
@@ -291,7 +333,7 @@ const Profile: React.FC = () => {
                 {/* Change password inline modal flow */}
                 {passwordFlowOpen && (
                   <ChangePasswordModal
-                    onClose={() => setPasswordFlowOpen(false)}
+                    onClose={() => dispatch(setPasswordFlowOpen(false))}
                     onSave={(current, next) => changePassword(current, next)}
                     isSaving={isSaving}
                   />

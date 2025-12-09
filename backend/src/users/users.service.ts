@@ -106,29 +106,38 @@ export class UsersService {
    *
    * @param userId - User ID to lookup
    * @returns Promise that resolves to sanitized user object
+   * @throws BadRequestException if userId is invalid
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
   async getUserById(userId: number): Promise<SanitizedUser> {
     try {
+      // Validate userId format
+      if (!Number.isInteger(userId) || userId <= 0) {
+        throw new BadRequestException('Invalid user ID provided.');
+      }
+
       const user = await this.usersRepository.findOne({
         where: { user_id: userId },
       });
 
       if (!user) {
         console.error('[USERS] getUserById - user not found:', { userId });
-        throw new NotFoundException('User not found.');
+        throw new NotFoundException(`User with ID ${userId} not found.`);
       }
 
       return this.sanitizeUser(user);
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        // Expected error already logged above
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
 
+      console.error('[USERS] Error retrieving user by ID:', error);
       throw new InternalServerErrorException(
-        'Unable to retrieve the requested user.'
+        'Unable to retrieve the requested user. Please try again later.'
       );
     }
   }
@@ -140,7 +149,7 @@ export class UsersService {
    * @param userId - User ID to update
    * @param updateUserDto - Validated update data (validation happens in DTO)
    * @returns Promise that resolves to updated sanitized user object
-   * @throws BadRequestException if email already in use by another user
+   * @throws BadRequestException if userId is invalid or email already in use by another user
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
@@ -149,13 +158,18 @@ export class UsersService {
     updateUserDto: UpdateUserDto
   ): Promise<SanitizedUser> {
     try {
+      // Validate userId format
+      if (!Number.isInteger(userId) || userId <= 0) {
+        throw new BadRequestException('Invalid user ID provided.');
+      }
+
       const user = await this.usersRepository.findOne({
         where: { user_id: userId },
       });
 
       if (!user) {
         console.error('[USERS] updateUser - user not found:', { userId });
-        throw new NotFoundException('User not found.');
+        throw new NotFoundException(`User with ID ${userId} not found.`);
       }
 
       let hasChanges = false;
@@ -167,8 +181,12 @@ export class UsersService {
         });
 
         if (emailOwner && emailOwner.user_id !== userId) {
+          console.warn('[USERS] Email conflict during update:', {
+            userId,
+            email: updateUserDto.email,
+          });
           throw new BadRequestException(
-            'Email is already registered to another account.'
+            'This email address is already registered to another account.'
           );
         }
 
@@ -184,23 +202,24 @@ export class UsersService {
 
       // Only save if there are changes
       if (!hasChanges) {
+        console.log('[USERS] No changes detected for user update:', { userId });
         return this.sanitizeUser(user);
       }
 
       const updatedUser = await this.usersRepository.save(user);
+      console.log('[USERS] User updated successfully:', { userId });
       return this.sanitizeUser(updatedUser);
     } catch (error) {
       if (
         error instanceof BadRequestException ||
         error instanceof NotFoundException
       ) {
-        // Expected validation error
         throw error;
       }
-      console.error(error);
 
+      console.error('[USERS] Error updating user:', error);
       throw new InternalServerErrorException(
-        'Unable to update user information.'
+        'Unable to update user information. Please try again later.'
       );
     }
   }
@@ -212,8 +231,8 @@ export class UsersService {
    * @param userId - User ID
    * @param changePasswordDto - Validated password data (validation happens in DTO)
    * @returns Promise that resolves when password is successfully changed
+   * @throws BadRequestException if userId is invalid or new password matches current password
    * @throws UnauthorizedException if current password is incorrect
-   * @throws BadRequestException if new password matches current password
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
@@ -222,13 +241,27 @@ export class UsersService {
     changePasswordDto: ChangePasswordDto
   ): Promise<void> {
     try {
+      // Validate userId format
+      if (!Number.isInteger(userId) || userId <= 0) {
+        throw new BadRequestException('Invalid user ID provided.');
+      }
+
       const user = await this.usersRepository.findOne({
         where: { user_id: userId },
       });
 
       if (!user) {
         console.error('[USERS] changePassword - user not found:', { userId });
-        throw new NotFoundException('User not found.');
+        throw new NotFoundException(`User with ID ${userId} not found.`);
+      }
+
+      if (!user.password) {
+        console.error('[USERS] changePassword - user has no password set:', {
+          userId,
+        });
+        throw new InternalServerErrorException(
+          'User account is not properly configured. Please contact support.'
+        );
       }
 
       // Business logic: Verify current password
@@ -238,10 +271,12 @@ export class UsersService {
       );
 
       if (!currentMatches) {
-        console.error('[USERS] changePassword - incorrect current password:', {
+        console.warn('[USERS] changePassword - incorrect current password:', {
           userId,
         });
-        throw new UnauthorizedException('Current password is incorrect.');
+        throw new UnauthorizedException(
+          'Current password is incorrect. Please try again.'
+        );
       }
 
       // Business logic: Ensure new password is different
@@ -251,11 +286,11 @@ export class UsersService {
       );
 
       if (newMatchesExisting) {
-        console.error('[USERS] changePassword - new password matches old:', {
+        console.warn('[USERS] changePassword - new password matches old:', {
           userId,
         });
         throw new BadRequestException(
-          'New password must differ from the current password.'
+          'New password must be different from your current password.'
         );
       }
 
@@ -266,19 +301,19 @@ export class UsersService {
       );
 
       await this.usersRepository.save(user);
+      console.log('[USERS] Password changed successfully:', { userId });
     } catch (error) {
       if (
         error instanceof BadRequestException ||
         error instanceof NotFoundException ||
         error instanceof UnauthorizedException
       ) {
-        // Expected validation/auth errors
         throw error;
       }
 
-      console.error(error);
+      console.error('[USERS] Error changing password:', error);
       throw new InternalServerErrorException(
-        'Unable to change password at this time.'
+        'Unable to change password at this time. Please try again later.'
       );
     }
   }
@@ -288,30 +323,39 @@ export class UsersService {
    *
    * @param userId - User ID to delete
    * @returns Promise that resolves when user is successfully deleted
+   * @throws BadRequestException if userId is invalid
    * @throws NotFoundException if user doesn't exist
    * @throws InternalServerErrorException for database errors
    */
   async deleteUser(userId: number): Promise<void> {
     try {
+      // Validate userId format
+      if (!Number.isInteger(userId) || userId <= 0) {
+        throw new BadRequestException('Invalid user ID provided.');
+      }
+
       const user = await this.usersRepository.findOne({
         where: { user_id: userId },
       });
 
       if (!user) {
         console.error('[USERS] deleteUser - user not found:', { userId });
-        throw new NotFoundException('User not found.');
+        throw new NotFoundException(`User with ID ${userId} not found.`);
       }
 
       await this.usersRepository.remove(user);
+      console.log('[USERS] User deleted successfully:', { userId });
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        // Already logged above
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
         throw error;
       }
 
-      console.error(error);
+      console.error('[USERS] Error deleting user:', error);
       throw new InternalServerErrorException(
-        'Unable to delete user at this time.'
+        'Unable to delete user at this time. Please try again later.'
       );
     }
   }
@@ -322,24 +366,41 @@ export class UsersService {
    *
    * @param email - Email address to lookup
    * @returns Promise that resolves to user entity with password, or null if not found
+   * @throws BadRequestException if email is invalid
    * @throws InternalServerErrorException for database errors
    */
   async findUserByEmail(email: string): Promise<User | null> {
-    const normalizedEmail = email.trim().toLowerCase();
-
-    if (!normalizedEmail) {
-      return null;
-    }
-
     try {
+      if (!email || typeof email !== 'string') {
+        throw new BadRequestException('Valid email address is required.');
+      }
+
+      const normalizedEmail = email.trim().toLowerCase();
+
+      if (!normalizedEmail) {
+        throw new BadRequestException('Email address cannot be empty.');
+      }
+
+      // Basic email format validation
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(normalizedEmail)) {
+        throw new BadRequestException('Invalid email address format.');
+      }
+
       const user = await this.usersRepository.findOne({
         where: { email: normalizedEmail },
       });
 
       return user ?? null;
     } catch (error) {
-      console.error(error);
-      throw new InternalServerErrorException('Unable to lookup user by email.');
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+
+      console.error('[USERS] Error looking up user by email:', error);
+      throw new InternalServerErrorException(
+        'Unable to lookup user by email. Please try again later.'
+      );
     }
   }
 

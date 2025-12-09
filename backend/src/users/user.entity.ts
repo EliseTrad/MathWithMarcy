@@ -1,17 +1,28 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
+  Index,
   OneToMany,
   PrimaryGeneratedColumn,
   Unique,
+  UpdateDateColumn,
 } from 'typeorm';
 import { UserAnswer } from '../user-answers/user-answer.entity';
 /**
  * Represents a student record stored in the `users` table.
  *
- * The entity definition informs TypeORM about the exact column mappings,
- * constraints, and data limits enforced by PostgreSQL so repository
- * operations in the service layer remain consistent with the schema.
+ * Database Design:
+ * - Primary Key: user_id (auto-increment)
+ * - Unique Constraint: email (enforces one account per email)
+ * - Indexes: email (for login lookups), created_at (for reporting)
+ * - Relationships: One-to-Many with UserAnswer (cascade delete)
+ * - Audit Fields: created_at, updated_at (automatic timestamp management)
+ *
+ * The entity definition enforces business rules at the database level:
+ * - Email uniqueness prevents duplicate accounts
+ * - Non-null constraints ensure data integrity
+ * - Cascade delete ensures referential integrity
  */
 @Entity({ name: 'users' })
 @Unique('uq_users_email', ['email'])
@@ -53,8 +64,26 @@ export class User {
   public password!: string;
 
   /**
-   * Reverse relation: a user can have many submitted answers.
+   * Timestamp when the user account was created.
+   * Automatically set by TypeORM on insert.
    */
-  @OneToMany(() => UserAnswer, (answer) => answer.user)
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  @Index('idx_users_created_at')
+  public created_at!: Date;
+
+  /**
+   * Timestamp when the user account was last updated.
+   * Automatically updated by TypeORM on any modification.
+   */
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  public updated_at!: Date;
+
+  /**
+   * Reverse relation: a user can have many submitted answers.
+   * Cascade delete ensures answers are removed when user is deleted.
+   */
+  @OneToMany(() => UserAnswer, (answer) => answer.user, {
+    cascade: true,
+  })
   public answers!: UserAnswer[];
 }

@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppSelector, useAppDispatch } from '../store';
+import { logout } from '../store/slices/authSlice';
 
 /**
  * Modern pink-themed navbar with Bootstrap 5.
@@ -8,11 +9,12 @@ import { useAuth } from '../contexts/AuthContext';
  * Mobile responsive with collapsible menu.
  */
 const PublicNavbar: React.FC = () => {
-  const { isAuthenticated, logout } = useAuth();
+  const { isAuthenticated } = useAppSelector((state) => state.auth);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
+    dispatch(logout());
     navigate('/login');
   };
 

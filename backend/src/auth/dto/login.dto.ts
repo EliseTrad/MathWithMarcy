@@ -9,22 +9,26 @@ import {
   MinLength,
 } from 'class-validator';
 
+/**
+ * DTO for user login with enhanced validation messages
+ * Provides clear feedback for authentication attempts
+ */
 export class LoginDto {
-  @IsEmail()
-  @IsNotEmpty()
-  @MaxLength(150)
+  @IsEmail({}, { message: 'Please provide a valid email address' })
+  @IsNotEmpty({ message: 'Email is required' })
+  @MaxLength(150, { message: 'Email cannot exceed 150 characters' })
   @Transform(({ value }) =>
     typeof value === 'string' ? value.trim().toLowerCase() : value
   )
   email!: string;
 
-  @IsString()
-  @IsNotEmpty()
-  @MinLength(8)
-  @MaxLength(255)
+  @IsString({ message: 'Password must be a text value' })
+  @IsNotEmpty({ message: 'Password is required' })
+  @MinLength(8, { message: 'Password must be at least 8 characters long' })
+  @MaxLength(255, { message: 'Password cannot exceed 255 characters' })
   password!: string;
 
-  @IsBoolean()
+  @IsBoolean({ message: 'Remember me must be true or false' })
   @IsOptional()
   remember?: boolean;
 }

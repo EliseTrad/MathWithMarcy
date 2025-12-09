@@ -3,14 +3,15 @@
  */
 import React from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppDispatch } from '../store';
+import { logout } from '../store/slices/authSlice';
 
 const Header: React.FC = () => {
-  const { logout } = useAuth();
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
   const handleLogout = () => {
-    logout();
+    dispatch(logout());
     navigate('/login');
   };
 

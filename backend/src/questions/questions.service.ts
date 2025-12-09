@@ -57,6 +57,7 @@ export class QuestionsService {
    * @param {string} [filters.difficulty] - Question difficulty (Easy, Medium, Hard)
    * @param {string} [filters.random] - Whether to randomize results ('true' for random order)
    * @returns {Promise<Question[]>} Array of filtered questions, optionally in random order
+   * @throws {BadRequestException} When filter values are invalid
    * @throws {InternalServerErrorException} When database operation fails or filter validation errors occur
    */
   async getFilteredQuestions(
@@ -70,6 +71,28 @@ export class QuestionsService {
         'WordProblem',
       ] as const;
       const validDifficulties = ['Easy', 'Medium', 'Hard'] as const;
+
+      // Validate topic filter if provided
+      if (
+        filters.topic &&
+        !validTopics.includes(filters.topic as (typeof validTopics)[number])
+      ) {
+        throw new BadRequestException(
+          `Invalid topic. Must be one of: ${validTopics.join(', ')}`
+        );
+      }
+
+      // Validate difficulty filter if provided
+      if (
+        filters.difficulty &&
+        !validDifficulties.includes(
+          filters.difficulty as (typeof validDifficulties)[number]
+        )
+      ) {
+        throw new BadRequestException(
+          `Invalid difficulty. Must be one of: ${validDifficulties.join(', ')}`
+        );
+      }
 
       // Only pass valid filters
       const topicFilter =
@@ -96,12 +119,20 @@ export class QuestionsService {
         questions = questions.sort(() => Math.random() - 0.5);
       }
 
-      console.log('[QUESTIONS] Filtered questions count:', questions.length);
+      console.log(
+        '[QUESTIONS] Filtered questions count:',
+        questions.length,
+        'Filters:',
+        filters
+      );
       return questions;
     } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
       console.error('[QUESTIONS] Error fetching filtered questions:', error);
       throw new InternalServerErrorException(
-        'Unable to retrieve questions at this time.'
+        'Unable to retrieve questions at this time. Please try again later.'
       );
     }
   }
@@ -117,6 +148,7 @@ export class QuestionsService {
    * @param {SubmitAnswerDto} dto - Answer submission data
    * @param {string} dto.userAnswer - The user's submitted answer
    * @returns {Promise<{isCorrect: boolean; correctAnswer: string}>} Result object containing correctness status and the correct answer
+   * @throws {BadRequestException} When userId or questionId is invalid
    * @throws {NotFoundException} When the specified question doesn't exist
    * @throws {InternalServerErrorException} When database operations fail
    */
@@ -124,15 +156,42 @@ export class QuestionsService {
     userId: number,
     questionId: number,
     dto: SubmitAnswerDto
-  ): Promise<{ isCorrect: boolean; correctAnswer: string }> {
+  ): Promise<{
+    isCorrect: boolean;
+    correctAnswer: string;
+    userAnswerId: number | null;
+  }> {
     try {
+      // Validate input IDs
+      if (!Number.isInteger(userId) || userId <= 0) {
+        throw new BadRequestException('Invalid user ID provided.');
+      }
+
+      if (!Number.isInteger(questionId) || questionId <= 0) {
+        throw new BadRequestException('Invalid question ID provided.');
+      }
+
       // Find the question
       const question = await this.questionsRepo.findOne({
         where: { question_id: questionId },
       });
 
       if (!question) {
-        throw new NotFoundException('Question not found.');
+        console.warn('[QUESTIONS] Question not found for id:', questionId);
+        throw new NotFoundException(
+          `Question with ID ${questionId} not found. It may have been deleted.`
+        );
+      }
+
+      // Validate that question has a correct answer
+      if (!question.correct_answer) {
+        console.error(
+          '[QUESTIONS] Question missing correct answer:',
+          questionId
+        );
+        throw new InternalServerErrorException(
+          'This question is not properly configured. Please try another question.'
+        );
       }
 
       // Check if answer is correct (case-insensitive, trimmed)
@@ -150,17 +209,32 @@ export class QuestionsService {
       (userAnswerEntity as any).user = { user_id: userId };
       (userAnswerEntity as any).question = { question_id: questionId };
 
-      await this.userAnswersRepo.save(userAnswerEntity);
+      const savedAnswer = await this.userAnswersRepo.save(userAnswerEntity);
+
+      console.log(
+        '[QUESTIONS] Answer submitted - User:',
+        userId,
+        'Question:',
+        questionId,
+        'Correct:',
+        isCorrect
+      );
 
       return {
         isCorrect,
         correctAnswer: question.correct_answer,
+        userAnswerId: savedAnswer.answer_id ?? null,
       };
     } catch (error) {
-      if (error instanceof NotFoundException) throw error;
+      if (
+        error instanceof NotFoundException ||
+        error instanceof BadRequestException
+      ) {
+        throw error;
+      }
       console.error('[QUESTIONS] Error submitting answer:', error);
       throw new InternalServerErrorException(
-        'Unable to submit answer at this time.'
+        'Unable to submit answer at this time. Please try again.'
       );
     }
   }

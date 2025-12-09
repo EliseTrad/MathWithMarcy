@@ -1,6 +1,6 @@
 import React from 'react';
 import { Outlet, Navigate } from 'react-router-dom';
-import { useAuth } from '../contexts/AuthContext';
+import { useAppSelector } from '../store';
 import Header from './Header';
 import Footer from './Footer';
 
@@ -10,7 +10,7 @@ import Footer from './Footer';
  * - Neutral background, content spaced below header
  */
 const ProtectedLayout: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
 
   if (!isAuthenticated || !user) {
     // Not authenticated — redirect to login

@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-
-import { useAuth } from '../../contexts/AuthContext';
+import { useAppDispatch, useAppSelector } from '../../store';
+import { loginUser, clearAuthError } from '../../store/slices/authSlice';
+import {
+  setLoginField,
+  setLoginFieldError,
+  resetLoginForm,
+} from '../../store/slices/formSlice';
 
 type FieldErrors = {
   email?: string;
@@ -16,18 +21,31 @@ type LoginFormProps = {
  * Login form card handling validation, API submission, and user feedback.
  */
 const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { login } = useAuth();
+  const dispatch = useAppDispatch();
+  const { isLoading, error, isAuthenticated } = useAppSelector(
+    (state) => state.auth
+  );
+  const { email, password, remember, fieldErrors } = useAppSelector(
+    (state) => state.form.login
+  );
 
   const isSubmitDisabled = useMemo(
-    () => isSubmitting || !email.trim() || !password.trim(),
-    [email, isSubmitting, password]
+    () => isLoading || !email.trim() || !password.trim(),
+    [email, isLoading, password]
   );
+
+  useEffect(() => {
+    if (isAuthenticated) {
+      onSuccess();
+    }
+  }, [isAuthenticated, onSuccess]);
+
+  useEffect(() => {
+    return () => {
+      dispatch(clearAuthError());
+      dispatch(resetLoginForm());
+    };
+  }, [dispatch]);
 
   const validateForm = (): boolean => {
     const errors: FieldErrors = {};
@@ -43,49 +61,32 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
       errors.password = 'Password is required.';
     }
 
-    setFieldErrors(errors);
+    // Update field errors in Redux
+    Object.entries(errors).forEach(([field, error]) => {
+      dispatch(setLoginFieldError({ field, error }));
+    });
+
     return Object.keys(errors).length === 0;
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    console.log('[LOGIN FORM] Form submitted');
-
     if (!validateForm()) {
-      console.log('[LOGIN FORM] Validation failed');
       return;
     }
 
-    setIsSubmitting(true);
-    setFieldErrors({});
-    setFormError(null);
+    // Clear field errors
+    dispatch(setLoginField({ field: 'fieldErrors', value: {} }));
+    dispatch(clearAuthError());
 
-    const trimmedEmail = email.trim().toLowerCase();
-    console.log('[LOGIN FORM] Attempting login for:', trimmedEmail);
-
-    try {
-      const result = await login({
-        email: trimmedEmail,
+    await dispatch(
+      loginUser({
+        email: email.trim().toLowerCase(),
         password,
-      });
-
-      console.log('[LOGIN FORM] Login result:', result);
-
-      if (!result.success) {
-        console.log('[LOGIN FORM] Login failed:', result.message);
-        setFormError(result.message ?? 'Invalid email or password.');
-        return;
-      }
-
-      console.log('[LOGIN FORM] Login successful, calling onSuccess');
-      onSuccess();
-    } catch (error) {
-      console.error('[LOGIN FORM] Unexpected login error', error);
-      setFormError('Something went wrong. Please try again.');
-    } finally {
-      setIsSubmitting(false);
-    }
+        remember,
+      })
+    );
   };
 
   return (
@@ -97,9 +98,9 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
         </p>
       </div>
 
-      {formError && (
+      {error && (
         <div className="alert alert-danger rounded-4" role="alert">
-          {formError}
+          {error}
         </div>
       )}
 
@@ -118,7 +119,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
               fieldErrors.email ? 'is-invalid' : ''
             }`}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setLoginField({ field: 'email', value: event.target.value })
+              )
+            }
             placeholder="you@example.com"
             autoComplete="email"
           />
@@ -141,7 +146,11 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
               fieldErrors.password ? 'is-invalid' : ''
             }`}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setLoginField({ field: 'password', value: event.target.value })
+              )
+            }
             placeholder="••••••••"
             autoComplete="current-password"
           />
@@ -150,12 +159,32 @@ const LoginForm: React.FC<LoginFormProps> = ({ onSuccess }) => {
           )}
         </div>
 
+        <div className="mb-4 form-check">
+          <input
+            id="remember-me"
+            type="checkbox"
+            className="form-check-input"
+            checked={remember}
+            onChange={(event) =>
+              dispatch(
+                setLoginField({
+                  field: 'remember',
+                  value: event.target.checked,
+                })
+              )
+            }
+          />
+          <label htmlFor="remember-me" className="form-check-label text-muted">
+            Remember me
+          </label>
+        </div>
+
         <button
           type="submit"
           className="btn btn-danger btn-lg w-100 rounded-pill py-2"
           disabled={isSubmitDisabled}
         >
-          {isSubmitting ? 'Logging in…' : 'Login'}
+          {isLoading ? 'Logging in…' : 'Login'}
         </button>
       </form>
 

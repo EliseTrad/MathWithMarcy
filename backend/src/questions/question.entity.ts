@@ -1,14 +1,31 @@
 import {
   Column,
+  CreateDateColumn,
   Entity,
   Index,
   OneToMany,
   PrimaryGeneratedColumn,
+  UpdateDateColumn,
 } from 'typeorm';
 import { UserAnswer } from '../user-answers/user-answer.entity';
 
-// Pure structural mapping for the `questions` table
+/**
+ * Question entity representing the `questions` table.
+ *
+ * Database Design:
+ * - Primary Key: question_id (auto-increment)
+ * - Indexes: topic, difficulty (for filtering), composite index on (topic, difficulty)
+ * - Constraints: All core fields are NOT NULL to ensure data integrity
+ * - Relationships: One-to-Many with UserAnswer (cascade delete)
+ * - Audit Fields: created_at, updated_at
+ *
+ * Business Logic Enforced at Database Level:
+ * - Topic and difficulty are indexed for efficient filtering
+ * - Composite index supports common query pattern (topic + difficulty)
+ * - Cascade delete ensures answers are removed when question is deleted
+ */
 @Entity('questions')
+@Index('idx_questions_topic_difficulty', ['topic', 'difficulty'])
 export class Question {
   // Primary key
   @PrimaryGeneratedColumn()
@@ -36,7 +53,26 @@ export class Question {
   @Column({ type: 'text', nullable: true })
   hint: string | null = null;
 
-  /** Reverse relation: all answers submitted for this question */
-  @OneToMany(() => UserAnswer, (ua) => ua.question)
+  /**
+   * Timestamp when the question was created.
+   * Useful for tracking question additions and reporting.
+   */
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
+  public created_at!: Date;
+
+  /**
+   * Timestamp when the question was last updated.
+   * Tracks modifications to question content.
+   */
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
+  public updated_at!: Date;
+
+  /**
+   * Reverse relation: all answers submitted for this question.
+   * Cascade delete ensures answers are removed when question is deleted.
+   */
+  @OneToMany(() => UserAnswer, (ua) => ua.question, {
+    cascade: true,
+  })
   userAnswers!: UserAnswer[];
 }

@@ -1,98 +1,76 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import type { AxiosError } from 'axios';
-import type { Question, Topic, Difficulty } from '../types/questions';
-import { getQuestions, submitAnswer } from '../api/questionsApi';
+import type { Topic, Difficulty } from '../types/questions';
+import { useAppDispatch, useAppSelector } from '../store';
+import {
+  fetchQuestions,
+  submitAnswer,
+  setSelectedTopic,
+  setSelectedDifficulty,
+  setUserAnswer,
+  toggleShowHint,
+  nextQuestion,
+  resetQuiz,
+  clearQuestionsError,
+} from '../store/slices/questionsSlice';
 import QuestionCard from '../components/questions/QuestionCard';
 import FeedbackMessage from '../components/questions/FeedbackMessage';
 import TopicSelector from '../components/questions/TopicSelector';
-
-type ErrorPayload = {
-  message?: string | string[];
-};
 
 /**
  * Main Questions Page - Practice math with Marcy
  */
 const Questions: React.FC = () => {
   const navigate = useNavigate();
+  const dispatch = useAppDispatch();
 
-  // Selection state
-  const [selectedTopic, setSelectedTopic] = useState<Topic | null>(null);
-  const [selectedDifficulty, setSelectedDifficulty] =
-    useState<Difficulty | null>(null);
+  const {
+    selectedTopic,
+    selectedDifficulty,
+    questions,
+    currentQuestionIndex,
+    userAnswer,
+    isSubmitting,
+    feedback,
+    showHint,
+    score,
+    error,
+  } = useAppSelector((state) => state.questions);
 
-  // Questions state
-  const [questions, setQuestions] = useState<Question[]>([]);
-  const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-  const [isLoadingQuestions, setIsLoadingQuestions] = useState(false);
-  const [questionsError, setQuestionsError] = useState<string | null>(null);
-
-  // Answer state
-  const [userAnswer, setUserAnswer] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const [feedback, setFeedback] = useState<{
-    isCorrect: boolean;
-    message: string;
-    correctAnswer?: string;
-  } | null>(null);
-
-  // UI state
-  const [showHint, setShowHint] = useState(false);
-  const [score, setScore] = useState({ correct: 0, total: 0 });
   const [isPracticeStarted, setIsPracticeStarted] = useState(false);
 
   const currentQuestion = questions[currentQuestionIndex];
 
-  /**
-   * Fetch questions from the backend
-   */
-  const fetchQuestions = async () => {
-    if (!selectedTopic || !selectedDifficulty) {
-      return;
-    }
-
-    setIsLoadingQuestions(true);
-    setQuestionsError(null);
-
-    try {
-      const fetchedQuestions = await getQuestions({
-        topic: selectedTopic,
-        difficulty: selectedDifficulty,
-        random: true,
-      });
-
-      if (fetchedQuestions.length === 0) {
-        setQuestionsError(
-          'No questions found for this topic and difficulty. Please try another selection.'
-        );
-        setIsPracticeStarted(false);
-      } else {
-        setQuestions(fetchedQuestions);
-        setCurrentQuestionIndex(0);
-        setScore({ correct: 0, total: 0 });
-      }
-    } catch (error) {
-      const axiosError = error as AxiosError<ErrorPayload>;
-
-      if (axiosError.response?.status === 401) {
-        setQuestionsError('Your session has expired. Please log in again.');
-        setTimeout(() => navigate('/login'), 2000);
-      } else {
-        setQuestionsError('Unable to load questions. Please try again later.');
-      }
-      setIsPracticeStarted(false);
-    } finally {
-      setIsLoadingQuestions(false);
-    }
-  };
+  useEffect(() => {
+    return () => {
+      dispatch(clearQuestionsError());
+    };
+  }, [dispatch]);
 
   /**
    * Start practice session
    */
-  const handleStartPractice = () => {
+  const handleStartPractice = async () => {
+    if (!selectedTopic || !selectedDifficulty) {
+      return;
+    }
+
     setIsPracticeStarted(true);
-    fetchQuestions();
+
+    const result = await dispatch(
+      fetchQuestions({
+        topic: selectedTopic,
+        difficulty: selectedDifficulty,
+        limit: 10,
+      })
+    );
+
+    if (fetchQuestions.rejected.match(result)) {
+      if (result.payload?.includes('401')) {
+        setTimeout(() => navigate('/login'), 2000);
+      }
+      setIsPracticeStarted(false);
+    }
   };
 
   /**
@@ -101,54 +79,23 @@ const Questions: React.FC = () => {
   const handleSubmitAnswer = async () => {
     if (!currentQuestion || !userAnswer.trim()) return;
 
-    setIsSubmitting(true);
-
-    try {
-      const result = await submitAnswer(
-        currentQuestion.question_id,
-        userAnswer.trim()
-      );
-
-      setFeedback({
-        isCorrect: result.isCorrect,
-        message: result.message,
-        correctAnswer: result.correctAnswer,
-      });
-
-      // Update score
-      setScore((prev) => ({
-        correct: prev.correct + (result.isCorrect ? 1 : 0),
-        total: prev.total + 1,
-      }));
-    } catch (error) {
-      const axiosError = error as AxiosError<ErrorPayload>;
-
-      if (axiosError.response?.status === 401) {
-        setQuestionsError('Your session has expired. Please log in again.');
-        setTimeout(() => navigate('/login'), 2000);
-      } else {
-        setQuestionsError('Unable to submit answer. Please try again.');
-      }
-    } finally {
-      setIsSubmitting(false);
-    }
+    await dispatch(
+      submitAnswer({
+        questionId: currentQuestion.question_id,
+        userAnswer: userAnswer.trim(),
+      })
+    );
   };
 
   /**
    * Move to next question
    */
   const handleNextQuestion = () => {
-    setFeedback(null);
-    setUserAnswer('');
-    setShowHint(false);
+    dispatch(nextQuestion());
 
-    // Check if there are more questions
-    if (currentQuestionIndex < questions.length - 1) {
-      setCurrentQuestionIndex((prev) => prev + 1);
-    } else {
-      // End of questions - show completion message or fetch new ones
+    // Check if this was the last question
+    if (currentQuestionIndex >= questions.length - 1) {
       setIsPracticeStarted(false);
-      setQuestions([]);
     }
   };
 
@@ -156,13 +103,8 @@ const Questions: React.FC = () => {
    * Reset and go back to topic selection
    */
   const handleBackToSelection = () => {
+    dispatch(resetQuiz());
     setIsPracticeStarted(false);
-    setQuestions([]);
-    setCurrentQuestionIndex(0);
-    setFeedback(null);
-    setUserAnswer('');
-    setShowHint(false);
-    setQuestionsError(null);
   };
 
   return (
@@ -189,35 +131,29 @@ const Questions: React.FC = () => {
                   ← Change Topic
                 </button>
                 <div className="badge bg-success rounded-pill px-3 py-2">
-                  Score: {score.correct} / {score.total}
+                  Score: {score}
                 </div>
               </div>
             )}
 
             {/* Error message */}
-            {questionsError && (
+            {error && (
               <div className="alert alert-danger rounded-4" role="alert">
-                {questionsError}
-              </div>
-            )}
-
-            {/* Loading state */}
-            {isLoadingQuestions && (
-              <div className="text-center py-5">
-                <div className="spinner-border text-danger" role="status">
-                  <span className="visually-hidden">Loading...</span>
-                </div>
-                <p className="mt-3 text-muted">Loading questions...</p>
+                {error}
               </div>
             )}
 
             {/* Topic Selection */}
-            {!isPracticeStarted && !isLoadingQuestions && (
+            {!isPracticeStarted && (
               <TopicSelector
                 selectedTopic={selectedTopic}
                 selectedDifficulty={selectedDifficulty}
-                onTopicChange={setSelectedTopic}
-                onDifficultyChange={setSelectedDifficulty}
+                onTopicChange={(topic: Topic) =>
+                  dispatch(setSelectedTopic(topic))
+                }
+                onDifficultyChange={(difficulty: Difficulty) =>
+                  dispatch(setSelectedDifficulty(difficulty))
+                }
                 onStartPractice={handleStartPractice}
               />
             )}
@@ -225,8 +161,7 @@ const Questions: React.FC = () => {
             {/* Practice Session Complete */}
             {isPracticeStarted &&
               questions.length > 0 &&
-              currentQuestionIndex >= questions.length &&
-              !isLoadingQuestions && (
+              currentQuestionIndex >= questions.length && (
                 <div className="card shadow-lg rounded-4 border-0">
                   <div className="card-body p-5 text-center">
                     <img
@@ -238,9 +173,7 @@ const Questions: React.FC = () => {
                     <h2 className="h3 text-danger mb-3">
                       Great Job! Session Complete!
                     </h2>
-                    <p className="lead mb-4">
-                      You scored {score.correct} out of {score.total}!
-                    </p>
+                    <p className="lead mb-4">You scored {score}!</p>
                     <div className="d-flex gap-2 justify-content-center">
                       <button
                         type="button"
@@ -262,35 +195,34 @@ const Questions: React.FC = () => {
               )}
 
             {/* Question Display */}
-            {isPracticeStarted &&
-              currentQuestion &&
-              !isLoadingQuestions &&
-              !feedback && (
-                <div className="backdrop-panel">
-                  <div className="mb-3 text-center">
-                    <span className="badge bg-primary rounded-pill">
-                      Question {currentQuestionIndex + 1} of {questions.length}
-                    </span>
-                  </div>
-                  <QuestionCard
-                    question={currentQuestion}
-                    userAnswer={userAnswer}
-                    onAnswerChange={setUserAnswer}
-                    onSubmit={handleSubmitAnswer}
-                    showHint={showHint}
-                    onToggleHint={() => setShowHint(!showHint)}
-                    isSubmitting={isSubmitting}
-                  />
+            {isPracticeStarted && currentQuestion && !feedback && (
+              <div className="backdrop-panel">
+                <div className="mb-3 text-center">
+                  <span className="badge bg-primary rounded-pill">
+                    Question {currentQuestionIndex + 1} of {questions.length}
+                  </span>
                 </div>
-              )}
+                <QuestionCard
+                  question={currentQuestion}
+                  userAnswer={userAnswer}
+                  onAnswerChange={(answer: string) =>
+                    dispatch(setUserAnswer(answer))
+                  }
+                  onSubmit={handleSubmitAnswer}
+                  showHint={showHint}
+                  onToggleHint={() => dispatch(toggleShowHint())}
+                  isSubmitting={isSubmitting}
+                />
+              </div>
+            )}
 
             {/* Feedback Display */}
             {isPracticeStarted && feedback && (
               <div className="backdrop-panel">
                 <FeedbackMessage
-                  isCorrect={feedback.isCorrect}
+                  isCorrect={feedback.is_correct}
                   message={feedback.message}
-                  correctAnswer={feedback.correctAnswer}
+                  correctAnswer={feedback.correct_answer}
                   onNext={handleNextQuestion}
                 />
               </div>

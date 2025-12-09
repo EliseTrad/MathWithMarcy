@@ -1,7 +1,12 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo } from 'react';
 import { Link } from 'react-router-dom';
-
-import { useAuth } from '../../contexts/AuthContext';
+import { useAppDispatch, useAppSelector } from '../../store';
+import { registerUser, clearAuthError } from '../../store/slices/authSlice';
+import {
+  setRegisterField,
+  setRegisterFieldError,
+  resetRegisterForm,
+} from '../../store/slices/formSlice';
 
 type FieldErrors = {
   name?: string;
@@ -18,25 +23,42 @@ type RegisterFormProps = {
  * Registration form card with client-side validation and contextual feedback.
  */
 const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
-  const [name, setName] = useState('');
-  const [email, setEmail] = useState('');
-  const [password, setPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
-  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
-  const [formError, setFormError] = useState<string | null>(null);
-  const [isSubmitting, setIsSubmitting] = useState(false);
-
-  const { register } = useAuth();
+  const dispatch = useAppDispatch();
+  const { isLoading, error, isAuthenticated } = useAppSelector(
+    (state) => state.auth
+  );
+  const {
+    name,
+    email,
+    password,
+    confirmPassword,
+    remember,
+    fieldErrors,
+    registrationCompleted,
+  } = useAppSelector((state) => state.form.register);
 
   const isSubmitDisabled = useMemo(
     () =>
-      isSubmitting ||
+      isLoading ||
       !name.trim() ||
       !email.trim() ||
       !password.trim() ||
       !confirmPassword.trim(),
-    [confirmPassword, email, isSubmitting, name, password]
+    [confirmPassword, email, isLoading, name, password]
   );
+
+  useEffect(() => {
+    if (isAuthenticated && registrationCompleted) {
+      onSuccess({ email: email.trim().toLowerCase() });
+    }
+  }, [isAuthenticated, registrationCompleted, email, onSuccess]);
+
+  useEffect(() => {
+    return () => {
+      dispatch(clearAuthError());
+      dispatch(resetRegisterForm());
+    };
+  }, [dispatch]);
 
   const validateForm = (): boolean => {
     const errors: FieldErrors = {};
@@ -67,7 +89,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
       errors.confirmPassword = 'Passwords do not match.';
     }
 
-    setFieldErrors(errors);
+    // Update field errors in Redux
+    Object.entries(errors).forEach(([field, error]) => {
+      dispatch(setRegisterFieldError({ field, error }));
+    });
+
     return Object.keys(errors).length === 0;
   };
 
@@ -78,51 +104,46 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
       return;
     }
 
-    setIsSubmitting(true);
-    setFieldErrors({});
-    setFormError(null);
+    // Clear field errors
+    dispatch(setRegisterField({ field: 'fieldErrors', value: {} }));
+    dispatch(clearAuthError());
 
-    try {
-      const result = await register({
+    const result = await dispatch(
+      registerUser({
         name: name.trim(),
         email: email.trim().toLowerCase(),
         password,
         autoLogin: true,
-        remember: true,
-      });
+        remember,
+      })
+    );
 
-      if (!result.success) {
-        const message = result.message ?? 'Unable to create your account.';
-        setFormError(message);
+    if (registerUser.fulfilled.match(result)) {
+      dispatch(
+        setRegisterField({ field: 'registrationCompleted', value: true })
+      );
+    } else if (registerUser.rejected.match(result)) {
+      const message = result.payload ?? 'Unable to create your account.';
+      const lowered = message.toLowerCase();
+      const newErrors: FieldErrors = {};
 
-        const lowered = message.toLowerCase();
-        const newErrors: FieldErrors = {};
-
-        if (lowered.includes('name')) {
-          newErrors.name = message;
-        }
-        if (lowered.includes('email')) {
-          newErrors.email = message;
-        }
-        if (lowered.includes('password')) {
-          newErrors.password = message;
-          setPassword('');
-          setConfirmPassword('');
-        }
-
-        if (Object.keys(newErrors).length > 0) {
-          setFieldErrors(newErrors);
-        }
-
-        return;
+      if (lowered.includes('name')) {
+        newErrors.name = message;
+      }
+      if (lowered.includes('email')) {
+        newErrors.email = message;
+      }
+      if (lowered.includes('password')) {
+        newErrors.password = message;
+        dispatch(setRegisterField({ field: 'password', value: '' }));
+        dispatch(setRegisterField({ field: 'confirmPassword', value: '' }));
       }
 
-      onSuccess({ email: email.trim().toLowerCase() });
-    } catch (error) {
-      console.error('Unexpected registration error', error);
-      setFormError('Something went wrong. Please try again.');
-    } finally {
-      setIsSubmitting(false);
+      if (Object.keys(newErrors).length > 0) {
+        Object.entries(newErrors).forEach(([field, error]) => {
+          dispatch(setRegisterFieldError({ field, error }));
+        });
+      }
     }
   };
 
@@ -135,9 +156,9 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
         </p>
       </div>
 
-      {formError && (
+      {error && (
         <div className="alert alert-danger rounded-4" role="alert">
-          {formError}
+          {error}
         </div>
       )}
 
@@ -156,7 +177,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
               fieldErrors.name ? 'is-invalid' : ''
             }`}
             value={name}
-            onChange={(event) => setName(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setRegisterField({ field: 'name', value: event.target.value })
+              )
+            }
             placeholder="Marceline Abacus"
             autoComplete="name"
           />
@@ -179,7 +204,11 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
               fieldErrors.email ? 'is-invalid' : ''
             }`}
             value={email}
-            onChange={(event) => setEmail(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setRegisterField({ field: 'email', value: event.target.value })
+              )
+            }
             placeholder="you@example.com"
             autoComplete="email"
           />
@@ -202,7 +231,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
               fieldErrors.password ? 'is-invalid' : ''
             }`}
             value={password}
-            onChange={(event) => setPassword(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setRegisterField({
+                  field: 'password',
+                  value: event.target.value,
+                })
+              )
+            }
             placeholder="Create a strong password"
             autoComplete="new-password"
           />
@@ -225,7 +261,14 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
               fieldErrors.confirmPassword ? 'is-invalid' : ''
             }`}
             value={confirmPassword}
-            onChange={(event) => setConfirmPassword(event.target.value)}
+            onChange={(event) =>
+              dispatch(
+                setRegisterField({
+                  field: 'confirmPassword',
+                  value: event.target.value,
+                })
+              )
+            }
             placeholder="Repeat your password"
             autoComplete="new-password"
           />
@@ -236,12 +279,32 @@ const RegisterForm: React.FC<RegisterFormProps> = ({ onSuccess }) => {
           )}
         </div>
 
+        <div className="mb-4 form-check">
+          <input
+            id="remember-me"
+            type="checkbox"
+            className="form-check-input"
+            checked={remember}
+            onChange={(event) =>
+              dispatch(
+                setRegisterField({
+                  field: 'remember',
+                  value: event.target.checked,
+                })
+              )
+            }
+          />
+          <label htmlFor="remember-me" className="form-check-label text-muted">
+            Remember me
+          </label>
+        </div>
+
         <button
           type="submit"
           className="btn btn-danger btn-lg w-100 rounded-pill py-2"
           disabled={isSubmitDisabled}
         >
-          {isSubmitting ? 'Registering…' : 'Register'}
+          {isLoading ? 'Registering…' : 'Register'}
         </button>
       </form>
 

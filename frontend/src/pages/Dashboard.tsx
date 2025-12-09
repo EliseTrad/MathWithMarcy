@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, useNavigate } from 'react-router-dom';
-import type { AxiosError } from 'axios';
-import { useAuth } from '../contexts/AuthContext';
-import { getUserStatistics } from '../api/statisticsApi';
-import type { UserStatistics } from '../types/statistics';
+import { useAppSelector, useAppDispatch } from '../store';
+import { fetchUserStatistics } from '../store/slices/statisticsSlice';
+import { setDashboardEncouragement } from '../store/slices/formSlice';
 
 type Category = {
   key: 'geometry' | 'algebra' | 'arithmetic' | 'wordProblem';
@@ -36,12 +35,15 @@ const encouragementMessages = [
  * - Shows user statistics and progress by topic and difficulty
  */
 const Dashboard: React.FC = () => {
-  const { isAuthenticated, user } = useAuth();
+  const { isAuthenticated, user } = useAppSelector((state) => state.auth);
+  const {
+    statistics,
+    isLoading,
+    error: statsError,
+  } = useAppSelector((state) => state.statistics);
+  const { encouragement } = useAppSelector((state) => state.form.dashboard);
+  const dispatch = useAppDispatch();
   const navigate = useNavigate();
-  const [statistics, setStatistics] = useState<UserStatistics | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [encouragement, setEncouragement] = useState('');
 
   useEffect(() => {
     // Pick a random encouragement message
@@ -49,34 +51,20 @@ const Dashboard: React.FC = () => {
       encouragementMessages[
         Math.floor(Math.random() * encouragementMessages.length)
       ];
-    setEncouragement(randomMsg);
-  }, []);
+    dispatch(setDashboardEncouragement(randomMsg));
+  }, [dispatch]);
 
   useEffect(() => {
-    const fetchStatistics = async () => {
-      try {
-        setIsLoading(true);
-        setError(null);
-        const stats = await getUserStatistics();
-        setStatistics(stats);
-      } catch (err) {
-        const axiosError = err as AxiosError;
-
-        if (axiosError.response?.status === 401) {
-          setError('Your session has expired. Redirecting to login...');
-          setTimeout(() => navigate('/login'), 2000);
-        } else {
-          setError('Unable to load statistics. Please try again later.');
-        }
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     if (isAuthenticated) {
-      fetchStatistics();
+      dispatch(fetchUserStatistics());
     }
-  }, [isAuthenticated, navigate]);
+  }, [isAuthenticated, dispatch]);
+
+  const error = statsError
+    ? statsError.includes('401')
+      ? 'Your session has expired. Redirecting to login...'
+      : 'Unable to load statistics. Please try again later.'
+    : null;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
@@ -86,9 +74,7 @@ const Dashboard: React.FC = () => {
     <div className="container-fluid p-0 p-lg-2">
       {/* Header */}
       <div className="mb-4">
-        <h2 className="h3 fw-bold text-danger mb-1">
-          Welcome, {user.name}!
-        </h2>
+        <h2 className="h3 fw-bold text-danger mb-1">Welcome, {user.name}!</h2>
         <p className="text-danger-emphasis mb-0">
           Here's your progress overview
         </p>

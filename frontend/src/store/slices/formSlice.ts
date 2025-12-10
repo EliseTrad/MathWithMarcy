@@ -1,4 +1,5 @@
-import { createSlice, PayloadAction } from '@reduxjs/toolkit';
+import { createSlice } from '@reduxjs/toolkit';
+import type { PayloadAction } from '@reduxjs/toolkit';
 
 interface FieldErrors {
   [key: string]: string;
@@ -26,6 +27,12 @@ interface ProfileFormState {
     name?: boolean;
     email?: boolean;
   };
+  name: string;
+  email: string;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  passwordError: string | null;
   isSaving: boolean;
   showDeleteConfirm: boolean;
   passwordFlowOpen: boolean;
@@ -64,6 +71,12 @@ const initialState: FormState = {
   },
   profile: {
     editing: {},
+    name: '',
+    email: '',
+    currentPassword: '',
+    newPassword: '',
+    confirmPassword: '',
+    passwordError: null,
     isSaving: false,
     showDeleteConfirm: false,
     passwordFlowOpen: false,
@@ -81,10 +94,13 @@ const formSlice = createSlice({
     // Login form actions
     setLoginField: (
       state,
-      action: PayloadAction<{ field: keyof LoginFormState; value: any }>
+      action: PayloadAction<{
+        field: keyof LoginFormState;
+        value: string | boolean | FieldErrors;
+      }>
     ) => {
       const { field, value } = action.payload;
-      (state.login as any)[field] = value;
+      (state.login as LoginFormState)[field] = value as never;
     },
     setLoginFieldError: (
       state,
@@ -102,10 +118,13 @@ const formSlice = createSlice({
     // Register form actions
     setRegisterField: (
       state,
-      action: PayloadAction<{ field: keyof RegisterFormState; value: any }>
+      action: PayloadAction<{
+        field: keyof RegisterFormState;
+        value: string | boolean | FieldErrors;
+      }>
     ) => {
       const { field, value } = action.payload;
-      (state.register as any)[field] = value;
+      (state.register as RegisterFormState)[field] = value as never;
     },
     setRegisterFieldError: (
       state,
@@ -126,6 +145,24 @@ const formSlice = createSlice({
       action: PayloadAction<{ name?: boolean; email?: boolean }>
     ) => {
       state.profile.editing = action.payload;
+    },
+    setProfileName: (state, action: PayloadAction<string>) => {
+      state.profile.name = action.payload;
+    },
+    setProfileEmail: (state, action: PayloadAction<string>) => {
+      state.profile.email = action.payload;
+    },
+    setCurrentPassword: (state, action: PayloadAction<string>) => {
+      state.profile.currentPassword = action.payload;
+    },
+    setNewPassword: (state, action: PayloadAction<string>) => {
+      state.profile.newPassword = action.payload;
+    },
+    setConfirmPassword: (state, action: PayloadAction<string>) => {
+      state.profile.confirmPassword = action.payload;
+    },
+    setPasswordError: (state, action: PayloadAction<string | null>) => {
+      state.profile.passwordError = action.payload;
     },
     setProfileSaving: (state, action: PayloadAction<boolean>) => {
       state.profile.isSaving = action.payload;
@@ -166,6 +203,12 @@ export const {
   clearRegisterFieldError,
   resetRegisterForm,
   setProfileEditing,
+  setProfileName,
+  setProfileEmail,
+  setCurrentPassword,
+  setNewPassword,
+  setConfirmPassword,
+  setPasswordError,
   setProfileSaving,
   setShowDeleteConfirm,
   setPasswordFlowOpen,

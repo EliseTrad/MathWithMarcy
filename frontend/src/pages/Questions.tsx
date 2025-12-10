@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import type { Topic, Difficulty } from '../types/questions';
 import { useAppDispatch, useAppSelector } from '../store';
@@ -12,6 +12,7 @@ import {
   nextQuestion,
   resetQuiz,
   clearQuestionsError,
+  setPracticeStarted,
 } from '../store/slices/questionsSlice';
 import QuestionCard from '../components/questions/QuestionCard';
 import FeedbackMessage from '../components/questions/FeedbackMessage';
@@ -35,9 +36,8 @@ const Questions: React.FC = () => {
     showHint,
     score,
     error,
+    isPracticeStarted,
   } = useAppSelector((state) => state.questions);
-
-  const [isPracticeStarted, setIsPracticeStarted] = useState(false);
 
   const currentQuestion = questions[currentQuestionIndex];
 
@@ -55,8 +55,6 @@ const Questions: React.FC = () => {
       return;
     }
 
-    setIsPracticeStarted(true);
-
     const result = await dispatch(
       fetchQuestions({
         topic: selectedTopic,
@@ -69,7 +67,7 @@ const Questions: React.FC = () => {
       if (result.payload?.includes('401')) {
         setTimeout(() => navigate('/login'), 2000);
       }
-      setIsPracticeStarted(false);
+      dispatch(setPracticeStarted(false));
     }
   };
 
@@ -95,7 +93,7 @@ const Questions: React.FC = () => {
 
     // Check if this was the last question
     if (currentQuestionIndex >= questions.length - 1) {
-      setIsPracticeStarted(false);
+      dispatch(setPracticeStarted(false));
     }
   };
 
@@ -104,7 +102,6 @@ const Questions: React.FC = () => {
    */
   const handleBackToSelection = () => {
     dispatch(resetQuiz());
-    setIsPracticeStarted(false);
   };
 
   return (

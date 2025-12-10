@@ -5,7 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
+import { DataSource, Repository } from 'typeorm';
 
 import { Question } from './question.entity';
 import { CreateQuestionDto } from './dto/create-question.dto';
@@ -24,7 +24,8 @@ export class QuestionsService {
     @InjectRepository(Question)
     private readonly questionsRepo: Repository<Question>,
     @InjectRepository(UserAnswer)
-    private readonly userAnswersRepo: Repository<UserAnswer>
+    private readonly userAnswersRepo: Repository<UserAnswer>,
+    private readonly dataSource: DataSource
   ) {}
 
   /**
@@ -142,6 +143,7 @@ export class QuestionsService {
    *
    * Business logic: Performs case-insensitive answer comparison, creates user answer record,
    * and establishes foreign key relationships with user and question entities.
+   * Uses database transaction to ensure atomicity.
    *
    * @param {number} userId - ID of the user submitting the answer
    * @param {number} questionId - ID of the question being answered
@@ -161,82 +163,87 @@ export class QuestionsService {
     correctAnswer: string;
     userAnswerId: number | null;
   }> {
-    try {
-      // Validate input IDs
-      if (!Number.isInteger(userId) || userId <= 0) {
-        throw new BadRequestException('Invalid user ID provided.');
-      }
-
-      if (!Number.isInteger(questionId) || questionId <= 0) {
-        throw new BadRequestException('Invalid question ID provided.');
-      }
-
-      // Find the question
-      const question = await this.questionsRepo.findOne({
-        where: { question_id: questionId },
-      });
-
-      if (!question) {
-        console.warn('[QUESTIONS] Question not found for id:', questionId);
-        throw new NotFoundException(
-          `Question with ID ${questionId} not found. It may have been deleted.`
-        );
-      }
-
-      // Validate that question has a correct answer
-      if (!question.correct_answer) {
-        console.error(
-          '[QUESTIONS] Question missing correct answer:',
-          questionId
-        );
-        throw new InternalServerErrorException(
-          'This question is not properly configured. Please try another question.'
-        );
-      }
-
-      // Check if answer is correct (case-insensitive, trimmed)
-      const userAnswer = dto.userAnswer.trim().toLowerCase();
-      const correctAnswer = question.correct_answer.trim().toLowerCase();
-      const isCorrect = userAnswer === correctAnswer;
-
-      // Create user answer record
-      const userAnswerEntity = this.userAnswersRepo.create({
-        user_answer: dto.userAnswer,
-        is_correct: isCorrect,
-      });
-
-      // Set foreign key relations
-      (userAnswerEntity as any).user = { user_id: userId };
-      (userAnswerEntity as any).question = { question_id: questionId };
-
-      const savedAnswer = await this.userAnswersRepo.save(userAnswerEntity);
-
-      console.log(
-        '[QUESTIONS] Answer submitted - User:',
-        userId,
-        'Question:',
-        questionId,
-        'Correct:',
-        isCorrect
-      );
-
-      return {
-        isCorrect,
-        correctAnswer: question.correct_answer,
-        userAnswerId: savedAnswer.answer_id ?? null,
-      };
-    } catch (error) {
-      if (
-        error instanceof NotFoundException ||
-        error instanceof BadRequestException
-      ) {
-        throw error;
-      }
-      console.error('[QUESTIONS] Error submitting answer:', error);
-      throw new InternalServerErrorException(
-        'Unable to submit answer at this time. Please try again.'
-      );
+    // Validate input IDs before transaction
+    if (!Number.isInteger(userId) || userId <= 0) {
+      throw new BadRequestException('Invalid user ID provided.');
     }
+
+    if (!Number.isInteger(questionId) || questionId <= 0) {
+      throw new BadRequestException('Invalid question ID provided.');
+    }
+
+    // Use transaction to ensure atomicity of answer submission
+    return await this.dataSource.transaction(async (manager) => {
+      try {
+        // Find the question within transaction
+        const question = await manager.findOne(Question, {
+          where: { question_id: questionId },
+        });
+
+        if (!question) {
+          console.warn('[QUESTIONS] Question not found for id:', questionId);
+          throw new NotFoundException(
+            `Question with ID ${questionId} not found. It may have been deleted.`
+          );
+        }
+
+        // Validate that question has a correct answer
+        if (!question.correct_answer) {
+          console.error(
+            '[QUESTIONS] Question missing correct answer:',
+            questionId
+          );
+          throw new InternalServerErrorException(
+            'This question is not properly configured. Please try another question.'
+          );
+        }
+
+        // Check if answer is correct (case-insensitive, trimmed)
+        const userAnswer = dto.userAnswer.trim().toLowerCase();
+        const correctAnswer = question.correct_answer.trim().toLowerCase();
+        const isCorrect = userAnswer === correctAnswer;
+
+        // Create user answer record
+        const userAnswerEntity = manager.create(UserAnswer, {
+          user_answer: dto.userAnswer,
+          is_correct: isCorrect,
+        });
+
+        // Set foreign key relations
+        (userAnswerEntity as any).user = { user_id: userId };
+        (userAnswerEntity as any).question = { question_id: questionId };
+
+        // Save within transaction
+        const savedAnswer = await manager.save(UserAnswer, userAnswerEntity);
+
+        console.log(
+          '[QUESTIONS] Answer submitted - User:',
+          userId,
+          'Question:',
+          questionId,
+          'Correct:',
+          isCorrect
+        );
+
+        return {
+          isCorrect,
+          correctAnswer: question.correct_answer,
+          userAnswerId: savedAnswer.answer_id ?? null,
+        };
+      } catch (error) {
+        // Transaction will auto-rollback on error
+        if (
+          error instanceof NotFoundException ||
+          error instanceof BadRequestException
+        ) {
+          throw error;
+        }
+        console.error('[QUESTIONS] Error submitting answer:', error);
+        throw new InternalServerErrorException(
+          'Unable to submit answer at this time. Please try again.'
+        );
+      }
+    });
   }
 
   /**

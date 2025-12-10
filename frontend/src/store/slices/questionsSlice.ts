@@ -29,6 +29,7 @@ type QuestionsState = {
   showHint: boolean;
   score: number;
   error: string | null;
+  isPracticeStarted: boolean;
 };
 
 type FetchQuestionsPayload = {
@@ -116,6 +117,7 @@ const initialState: QuestionsState = {
   showHint: false,
   score: 0,
   error: null,
+  isPracticeStarted: false,
 };
 
 /**
@@ -139,6 +141,9 @@ const questionsSlice = createSlice({
     },
     setShowHint: (state, action: PayloadAction<boolean>) => {
       state.showHint = action.payload;
+    },
+    setPracticeStarted: (state, action: PayloadAction<boolean>) => {
+      state.isPracticeStarted = action.payload;
     },
     nextQuestion: (state) => {
       if (state.currentQuestionIndex < state.questions.length - 1) {
@@ -164,6 +169,7 @@ const questionsSlice = createSlice({
       state.score = 0;
       state.questions = [];
       state.error = null;
+      state.isPracticeStarted = false;
     },
     clearFeedback: (state) => {
       state.feedback = null;
@@ -186,6 +192,7 @@ const questionsSlice = createSlice({
         state.showHint = false;
         state.score = 0;
         state.error = null;
+        state.isPracticeStarted = true;
       })
       .addCase(fetchQuestions.rejected, (state, action) => {
         state.error = action.payload ?? 'Failed to fetch questions';
@@ -218,6 +225,7 @@ export const {
   setUserAnswer,
   toggleShowHint,
   setShowHint,
+  setPracticeStarted,
   nextQuestion,
   previousQuestion,
   resetQuiz,

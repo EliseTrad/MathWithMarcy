@@ -1,9 +1,15 @@
-import React, { useState } from 'react';
+import React, { useEffect } from 'react';
 import { Navigate, Link, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../store';
 import { logout, setUser } from '../store/slices/authSlice';
 import {
   setProfileEditing,
+  setProfileName,
+  setProfileEmail,
+  setCurrentPassword,
+  setNewPassword,
+  setConfirmPassword,
+  setPasswordError,
   setProfileSaving,
   setShowDeleteConfirm,
   setPasswordFlowOpen,
@@ -26,14 +32,29 @@ import {
  */
 const Profile: React.FC = () => {
   const { isAuthenticated, user } = useAppSelector((state) => state.auth);
-  const { editing, isSaving, showDeleteConfirm, passwordFlowOpen, alert } =
-    useAppSelector((state) => state.form.profile);
+  const {
+    editing,
+    name,
+    email,
+    currentPassword,
+    newPassword,
+    confirmPassword,
+    passwordError,
+    isSaving,
+    showDeleteConfirm,
+    passwordFlowOpen,
+    alert,
+  } = useAppSelector((state) => state.form.profile);
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  // Local state for form fields only
-  const [name, setName] = useState<string>(user?.name ?? '');
-  const [email, setEmail] = useState<string>(user?.email ?? '');
+  // Initialize profile form fields from user data
+  useEffect(() => {
+    if (user) {
+      dispatch(setProfileName(user.name));
+      dispatch(setProfileEmail(user.email));
+    }
+  }, [user, dispatch]);
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;
@@ -184,7 +205,7 @@ const Profile: React.FC = () => {
                       className="form-control"
                       value={name}
                       readOnly={!editing.name}
-                      onChange={(e) => setName(e.target.value)}
+                      onChange={(e) => dispatch(setProfileName(e.target.value))}
                     />
                     <button
                       className="btn btn-outline-secondary"
@@ -206,7 +227,9 @@ const Profile: React.FC = () => {
                       className="form-control"
                       value={email}
                       readOnly={!editing.email}
-                      onChange={(e) => setEmail(e.target.value)}
+                      onChange={(e) =>
+                        dispatch(setProfileEmail(e.target.value))
+                      }
                     />
                     <button
                       className="btn btn-outline-secondary"
@@ -252,8 +275,8 @@ const Profile: React.FC = () => {
                   <button
                     className="btn btn-outline-secondary"
                     onClick={() => {
-                      setName(user.name);
-                      setEmail(user.email);
+                      dispatch(setProfileName(user.name));
+                      dispatch(setProfileEmail(user.email));
                       dispatch(setProfileEditing({}));
                     }}
                     disabled={isSaving}
@@ -333,8 +356,28 @@ const Profile: React.FC = () => {
                 {/* Change password inline modal flow */}
                 {passwordFlowOpen && (
                   <ChangePasswordModal
-                    onClose={() => dispatch(setPasswordFlowOpen(false))}
+                    onClose={() => {
+                      dispatch(setPasswordFlowOpen(false));
+                      dispatch(setCurrentPassword(''));
+                      dispatch(setNewPassword(''));
+                      dispatch(setConfirmPassword(''));
+                      dispatch(setPasswordError(null));
+                    }}
                     onSave={(current, next) => changePassword(current, next)}
+                    currentPassword={currentPassword}
+                    newPassword={newPassword}
+                    confirmPassword={confirmPassword}
+                    passwordError={passwordError}
+                    onCurrentPasswordChange={(val) =>
+                      dispatch(setCurrentPassword(val))
+                    }
+                    onNewPasswordChange={(val) => dispatch(setNewPassword(val))}
+                    onConfirmPasswordChange={(val) =>
+                      dispatch(setConfirmPassword(val))
+                    }
+                    onPasswordErrorChange={(val) =>
+                      dispatch(setPasswordError(val))
+                    }
                     isSaving={isSaving}
                   />
                 )}
@@ -353,26 +396,41 @@ const ChangePasswordModal: React.FC<{
     current: string,
     next: string
   ) => Promise<{ success: boolean; error?: string }>;
+  currentPassword: string;
+  newPassword: string;
+  confirmPassword: string;
+  passwordError: string | null;
+  onCurrentPasswordChange: (val: string) => void;
+  onNewPasswordChange: (val: string) => void;
+  onConfirmPasswordChange: (val: string) => void;
+  onPasswordErrorChange: (val: string | null) => void;
   isSaving?: boolean;
-}> = ({ onClose, onSave, isSaving }) => {
-  const [current, setCurrent] = useState('');
-  const [next, setNext] = useState('');
-  const [confirm, setConfirm] = useState('');
-  const [error, setError] = useState<string | null>(null);
-
+}> = ({
+  onClose,
+  onSave,
+  currentPassword,
+  newPassword,
+  confirmPassword,
+  passwordError,
+  onCurrentPasswordChange,
+  onNewPasswordChange,
+  onConfirmPasswordChange,
+  onPasswordErrorChange,
+  isSaving,
+}) => {
   const handleSave = async () => {
-    setError(null);
-    if (!current || !next) {
-      setError('Please fill both fields.');
+    onPasswordErrorChange(null);
+    if (!currentPassword || !newPassword) {
+      onPasswordErrorChange('Please fill both fields.');
       return;
     }
-    if (next !== confirm) {
-      setError('New passwords do not match.');
+    if (newPassword !== confirmPassword) {
+      onPasswordErrorChange('New passwords do not match.');
       return;
     }
-    const result = await onSave(current, next);
+    const result = await onSave(currentPassword, newPassword);
     if (!result.success && result.error) {
-      setError(result.error);
+      onPasswordErrorChange(result.error);
     }
   };
 
@@ -385,14 +443,16 @@ const ChangePasswordModal: React.FC<{
             <button type="button" className="btn-close" onClick={onClose} />
           </div>
           <div className="modal-body">
-            {error && <div className="alert alert-danger">{error}</div>}
+            {passwordError && (
+              <div className="alert alert-danger">{passwordError}</div>
+            )}
             <div className="mb-3">
               <label className="form-label">Current password</label>
               <input
                 type="password"
                 className="form-control"
-                value={current}
-                onChange={(e) => setCurrent(e.target.value)}
+                value={currentPassword}
+                onChange={(e) => onCurrentPasswordChange(e.target.value)}
               />
             </div>
             <div className="mb-3">
@@ -400,8 +460,8 @@ const ChangePasswordModal: React.FC<{
               <input
                 type="password"
                 className="form-control"
-                value={next}
-                onChange={(e) => setNext(e.target.value)}
+                value={newPassword}
+                onChange={(e) => onNewPasswordChange(e.target.value)}
               />
             </div>
             <div className="mb-3">
@@ -409,8 +469,8 @@ const ChangePasswordModal: React.FC<{
               <input
                 type="password"
                 className="form-control"
-                value={confirm}
-                onChange={(e) => setConfirm(e.target.value)}
+                value={confirmPassword}
+                onChange={(e) => onConfirmPasswordChange(e.target.value)}
               />
             </div>
           </div>

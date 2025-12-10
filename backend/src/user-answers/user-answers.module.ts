@@ -29,5 +29,6 @@ import { UserAnswersResolver } from './user-answers.resolver';
   imports: [TypeOrmModule.forFeature([UserAnswer])],
   controllers: [],
   providers: [UserAnswersService, UserAnswersResolver],
+  exports: [UserAnswersService],
 })
 export class UserAnswersModule {}

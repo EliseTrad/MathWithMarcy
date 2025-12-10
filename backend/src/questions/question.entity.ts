@@ -1,4 +1,5 @@
 import {
+  Check,
   Column,
   CreateDateColumn,
   Entity,
@@ -26,6 +27,11 @@ import { UserAnswer } from '../user-answers/user-answer.entity';
  */
 @Entity('questions')
 @Index('idx_questions_topic_difficulty', ['topic', 'difficulty'])
+@Check(
+  'chk_topic',
+  "topic IN ('Geometry', 'Algebra', 'Arithmetic', 'WordProblem')"
+)
+@Check('chk_difficulty', "difficulty IN ('Easy', 'Medium', 'Hard')")
 export class Question {
   // Primary key
   @PrimaryGeneratedColumn()

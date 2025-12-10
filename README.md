@@ -520,9 +520,7 @@ MathWithMarcy/
 │
 ├── .gitignore                    # Git ignore rules
 ├── package.json                  # Root package.json
-├── README.md                     # This file - Project documentation
-├── GRAPHQL_API_REFERENCE.md      # Complete GraphQL API documentation
-└── BACKEND_API_DOCUMENTATION.md  # Backend technical documentation
+└── README.md                     # This file - Project documentation
 ```
 
 ### Key Files Explained
@@ -1125,19 +1123,14 @@ Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
 
 ### Complete API Documentation
 
-📘 **[GRAPHQL_API_REFERENCE.md](./GRAPHQL_API_REFERENCE.md)** - Comprehensive
-GraphQL API documentation:
+📘 **GraphQL Playground** - Interactive API documentation available at
+`http://localhost:3001/graphql` when the backend server is running:
 
-- All queries and mutations with detailed examples
-- Complete request/response formats
-- Input validation rules and constraints
-- Authentication requirements per operation
-- Error codes and handling
-- Type definitions and schemas
-- Best practices and usage patterns
-
-📘 **[BACKEND_API_DOCUMENTATION.md](./BACKEND_API_DOCUMENTATION.md)** - Backend
-technical documentation:
+- All queries and mutations with schema introspection
+- Complete type definitions and schemas
+- Interactive query testing
+- Auto-complete and validation
+- Built-in documentation explorer
 
 - Complete method documentation for all services
 - Business logic explanations

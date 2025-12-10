@@ -30,5 +30,6 @@ import { UserAnswer } from '../user-answers/user-answer.entity';
   imports: [TypeOrmModule.forFeature([Question, UserAnswer])],
   controllers: [],
   providers: [QuestionsService, QuestionsResolver],
+  exports: [QuestionsService],
 })
 export class QuestionsModule {}

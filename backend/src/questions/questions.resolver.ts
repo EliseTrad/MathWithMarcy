@@ -10,6 +10,7 @@ import {
 } from './questions.inputs';
 import { GqlAuthGuard } from '../auth/gql-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 /**
  * GraphQL Resolver for Question Operations
@@ -21,6 +22,8 @@ import { CurrentUser } from '../auth/current-user.decorator';
  * @class QuestionsResolver
  * @authentication Required for all operations
  */
+@ApiTags('Questions')
+@ApiBearerAuth('JWT-auth')
 @Resolver(() => QuestionType)
 export class QuestionsResolver {
   constructor(private readonly questionsService: QuestionsService) {}

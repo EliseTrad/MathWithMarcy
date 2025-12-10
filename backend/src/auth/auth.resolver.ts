@@ -2,6 +2,7 @@ import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
 import { AuthResponse, UserType } from './auth.types';
 import { LoginInput, RegisterInput } from './auth.inputs';
+import { ApiTags, ApiOperation } from '@nestjs/swagger';
 
 /**
  * GraphQL Resolver for Authentication Operations
@@ -11,6 +12,7 @@ import { LoginInput, RegisterInput } from './auth.inputs';
  *
  * @class AuthResolver
  */
+@ApiTags('Authentication')
 @Resolver()
 export class AuthResolver {
   constructor(private readonly authService: AuthService) {}

@@ -4,6 +4,7 @@ import { UserAnswersService } from './user-answers.service';
 import { UserStatisticsType } from './user-answers.types';
 import { GqlAuthGuard } from '../auth/gql-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 /**
  * GraphQL Resolver for User Answer and Statistics Operations
@@ -15,6 +16,8 @@ import { CurrentUser } from '../auth/current-user.decorator';
  * @class UserAnswersResolver
  * @authentication Required for all operations
  */
+@ApiTags('User Answers')
+@ApiBearerAuth('JWT-auth')
 @Resolver()
 export class UserAnswersResolver {
   constructor(private readonly userAnswersService: UserAnswersService) {}

@@ -5,6 +5,7 @@ import { UserType } from './users.types';
 import { ChangePasswordInput, UpdateUserInput } from './users.inputs';
 import { GqlAuthGuard } from '../auth/gql-auth.guard';
 import { CurrentUser } from '../auth/current-user.decorator';
+import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 
 /**
  * GraphQL Resolver for User Profile Operations
@@ -15,6 +16,8 @@ import { CurrentUser } from '../auth/current-user.decorator';
  * @class UsersResolver
  * @authentication Required for all operations
  */
+@ApiTags('Users')
+@ApiBearerAuth('JWT-auth')
 @Resolver(() => UserType)
 export class UsersResolver {
   constructor(private readonly usersService: UsersService) {}

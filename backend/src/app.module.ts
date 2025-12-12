@@ -4,7 +4,7 @@ import * as Joi from 'joi';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
-import { join } from 'path';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
@@ -45,6 +45,14 @@ import { UserAnswer } from './user-answers/user-answer.entity';
       }),
     }),
 
+    // Rate limiting to prevent abuse
+    ThrottlerModule.forRoot([
+      {
+        ttl: 60000, // Time window in milliseconds (1 minute)
+        limit: 100, // Max requests per window
+      },
+    ]),
+
     // Configure TypeORM using ConfigService for proper dependency injection
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -65,7 +73,7 @@ import { UserAnswer } from './user-answers/user-answer.entity';
     // Configure GraphQL module with Apollo driver
     GraphQLModule.forRoot<ApolloDriverConfig>({
       driver: ApolloDriver,
-      autoSchemaFile: join(process.cwd(), 'src/schema.gql'),
+      autoSchemaFile: true,
       sortSchema: true,
       playground: true,
       context: ({ req }: { req: any }) => ({ req }),
@@ -80,7 +88,6 @@ import { UserAnswer } from './user-answers/user-answer.entity';
     QuestionsModule,
     UserAnswersModule,
   ],
-  controllers: [],
   providers: [],
 })
 export class AppModule {}

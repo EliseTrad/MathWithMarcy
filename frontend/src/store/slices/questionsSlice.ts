@@ -46,6 +46,23 @@ type SubmitAnswerPayload = {
 /**
  * Async Thunks
  */
+
+// Map frontend topic names to backend-compatible values
+const mapTopicToBackend = (topic: Topic): string => {
+  const topicMap: Record<Topic, string> = {
+    Geometry: 'Geometry',
+    Arithmetic: 'Arithmetic',
+    Algebra: 'Algebra',
+    'Word Problem': 'WordProblem',
+  };
+  return topicMap[topic] || topic;
+};
+
+// Difficulty mapping - backend expects capitalized values (Easy, Medium, Hard)
+const mapDifficultyToBackend = (difficulty: Difficulty): string => {
+  return difficulty; // Already in correct format (Easy, Medium, Hard)
+};
+
 export const fetchQuestions = createAsyncThunk<
   Question[],
   FetchQuestionsPayload,
@@ -55,8 +72,8 @@ export const fetchQuestions = createAsyncThunk<
     const result = await apolloClient.query<GetQuestionsResponse>({
       query: GET_QUESTIONS_QUERY,
       variables: {
-        topic: filters.topic,
-        difficulty: filters.difficulty,
+        topic: mapTopicToBackend(filters.topic),
+        difficulty: mapDifficultyToBackend(filters.difficulty),
         limit: filters.limit ?? 10,
       },
     });
@@ -66,10 +83,35 @@ export const fetchQuestions = createAsyncThunk<
     }
 
     return result.data.questions;
-  } catch (error) {
-    const message =
-      (error as Error).message ?? 'Unable to load questions. Please try again.';
-    return rejectWithValue(message);
+  } catch (error: unknown) {
+    // Extract user-friendly error message
+    const err = error as {
+      graphQLErrors?: Array<{ message?: string }>;
+      networkError?: { result?: { errors?: Array<{ message?: string }> } };
+      message?: string;
+    };
+
+    let userMessage = 'Unable to load questions. Please try again.';
+
+    if (err?.graphQLErrors?.length && err.graphQLErrors[0]?.message) {
+      // Hide technical details from validation errors
+      const msg = err.graphQLErrors[0].message;
+      if (msg.includes('Topic must be one of')) {
+        userMessage = 'Please select a valid topic and try again.';
+      } else if (msg.includes('Difficulty')) {
+        userMessage = 'Please select a valid difficulty level.';
+      } else {
+        userMessage = msg;
+      }
+    } else if (
+      err?.message &&
+      !err.message.includes('400') &&
+      !err.message.includes('successful')
+    ) {
+      userMessage = err.message;
+    }
+
+    return rejectWithValue(userMessage);
   }
 });
 
@@ -94,11 +136,27 @@ export const submitAnswer = createAsyncThunk<
       }
 
       return result.data.submitAnswer;
-    } catch (error) {
-      const message =
-        (error as Error).message ??
-        'Unable to submit answer. Please try again.';
-      return rejectWithValue(message);
+    } catch (error: unknown) {
+      // Extract user-friendly error message
+      const err = error as {
+        graphQLErrors?: Array<{ message?: string }>;
+        networkError?: { result?: { errors?: Array<{ message?: string }> } };
+        message?: string;
+      };
+
+      let userMessage = 'Unable to submit answer. Please try again.';
+
+      if (err?.graphQLErrors?.length && err.graphQLErrors[0]?.message) {
+        userMessage = err.graphQLErrors[0].message;
+      } else if (
+        err?.message &&
+        !err.message.includes('400') &&
+        !err.message.includes('successful')
+      ) {
+        userMessage = err.message;
+      }
+
+      return rejectWithValue(userMessage);
     }
   }
 );

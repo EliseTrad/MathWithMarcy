@@ -5,12 +5,14 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { GqlArgumentsHost } from '@nestjs/graphql';
 import { Request, Response } from 'express';
 import { QueryFailedError, EntityNotFoundError, TypeORMError } from 'typeorm';
+import { GraphQLError } from 'graphql';
 
 /**
  * Database exception filter that catches TypeORM errors and transforms them
- * into user-friendly HTTP responses.
+ * into user-friendly HTTP responses (REST) or GraphQL errors.
  *
  * Handles common database errors:
  * - Unique constraint violations (duplicate entries)
@@ -25,6 +27,12 @@ export class DatabaseExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(DatabaseExceptionFilter.name);
 
   catch(exception: TypeORMError, host: ArgumentsHost) {
+    // Check if this is a GraphQL context
+    if (host.getType<string>() === 'graphql') {
+      return this.handleGraphQLError(exception, host);
+    }
+
+    // Handle HTTP context
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -192,5 +200,57 @@ export class DatabaseExceptionFilter implements ExceptionFilter {
     }
 
     return 'A required field is missing';
+  }
+
+  /**
+   * Handle database errors in GraphQL context
+   */
+  private handleGraphQLError(exception: TypeORMError, host: ArgumentsHost) {
+    const gqlHost = GqlArgumentsHost.create(host);
+    const info = gqlHost.getInfo();
+
+    let message = 'An unexpected database error occurred';
+    let code = 'INTERNAL_SERVER_ERROR';
+
+    // Handle QueryFailedError
+    if (exception instanceof QueryFailedError) {
+      const dbError = this.handleQueryFailedError(exception);
+      message = dbError.message;
+
+      // Map HTTP status to GraphQL error codes
+      if (dbError.status === HttpStatus.CONFLICT) {
+        code = 'CONFLICT';
+      } else if (dbError.status === HttpStatus.BAD_REQUEST) {
+        code = 'BAD_REQUEST';
+      }
+    }
+    // Handle EntityNotFoundError
+    else if (exception instanceof EntityNotFoundError) {
+      message = 'The requested resource was not found';
+      code = 'NOT_FOUND';
+    }
+    // Generic TypeORM errors
+    else {
+      this.logger.error(
+        `Unhandled TypeORM error in GraphQL: ${exception.message}`,
+        exception.stack
+      );
+    }
+
+    // Log the error
+    this.logger.error(
+      `Database error in GraphQL ${info?.fieldName}: ${message}`,
+      exception.stack
+    );
+
+    // Throw GraphQL error
+    throw new GraphQLError(message, {
+      extensions: {
+        code,
+        exception: {
+          message: exception.message,
+        },
+      },
+    });
   }
 }

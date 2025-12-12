@@ -1,29 +1,5 @@
-import { Field, Int, ObjectType } from '@nestjs/graphql';
-
-/**
- * GraphQL User Type
- * Represents a student/user in the system
- */
-@ObjectType()
-export class UserType {
-  @Field(() => Int)
-  user_id!: number;
-
-  @Field()
-  name!: string;
-
-  @Field()
-  email!: string;
-
-  // Password is never exposed in GraphQL
-  // password is intentionally omitted
-
-  @Field()
-  created_at!: Date;
-
-  @Field()
-  updated_at!: Date;
-}
+import { Field, ObjectType } from '@nestjs/graphql';
+import { UserType } from '../users/users.types';
 
 /**
  * GraphQL Auth Response Type

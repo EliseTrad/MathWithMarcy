@@ -6,11 +6,13 @@ import {
   HttpStatus,
   Logger,
 } from '@nestjs/common';
+import { GqlArgumentsHost } from '@nestjs/graphql';
 import { Request, Response } from 'express';
+import { GraphQLError } from 'graphql';
 
 /**
  * Global exception filter that catches all HttpException instances
- * and formats them into a consistent response structure.
+ * and formats them into a consistent response structure for HTTP or GraphQL.
  *
  * This filter provides:
  * - Consistent error response format across the application
@@ -23,6 +25,12 @@ export class HttpExceptionFilter implements ExceptionFilter {
   private readonly logger = new Logger(HttpExceptionFilter.name);
 
   catch(exception: HttpException, host: ArgumentsHost) {
+    // Check if this is a GraphQL context
+    if (host.getType<string>() === 'graphql') {
+      return this.handleGraphQLError(exception, host);
+    }
+
+    // Handle HTTP context
     const ctx = host.switchToHttp();
     const response = ctx.getResponse<Response>();
     const request = ctx.getRequest<Request>();
@@ -83,5 +91,59 @@ export class HttpExceptionFilter implements ExceptionFilter {
         exception.stack
       );
     }
+  }
+
+  /**
+   * Handle HttpException in GraphQL context
+   */
+  private handleGraphQLError(exception: HttpException, host: ArgumentsHost) {
+    const gqlHost = GqlArgumentsHost.create(host);
+    const info = gqlHost.getInfo();
+    const status = exception.getStatus();
+    const exceptionResponse = exception.getResponse();
+
+    // Extract error message
+    const errorResponse =
+      typeof exceptionResponse === 'string'
+        ? { message: exceptionResponse }
+        : (exceptionResponse as any);
+
+    const message = errorResponse.message || exception.message;
+
+    // Map HTTP status to GraphQL error codes
+    let code = 'INTERNAL_SERVER_ERROR';
+    if (status === HttpStatus.BAD_REQUEST) {
+      code = 'BAD_REQUEST';
+    } else if (status === HttpStatus.UNAUTHORIZED) {
+      code = 'UNAUTHENTICATED';
+    } else if (status === HttpStatus.FORBIDDEN) {
+      code = 'FORBIDDEN';
+    } else if (status === HttpStatus.NOT_FOUND) {
+      code = 'NOT_FOUND';
+    } else if (status === HttpStatus.CONFLICT) {
+      code = 'CONFLICT';
+    }
+
+    // Log the error
+    this.logger.warn(
+      `GraphQL ${info?.fieldName} error (${status}): ${JSON.stringify(
+        message
+      )}`,
+      exception.stack
+    );
+
+    // Throw GraphQL error
+    throw new GraphQLError(
+      Array.isArray(message) ? message.join('; ') : message,
+      {
+        extensions: {
+          code,
+          http: { status },
+          ...(Array.isArray(errorResponse.message) && {
+            validationErrors: errorResponse.message,
+          }),
+        },
+      }
+    );
   }
 }

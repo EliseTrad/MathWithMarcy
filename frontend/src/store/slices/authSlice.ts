@@ -121,11 +121,31 @@ export const loginUser = createAsyncThunk<
       user: result.data.login.user,
       remember: credentials.remember ?? false,
     };
-  } catch (error) {
-    const message =
-      (error as Error).message ??
-      'Unable to sign in. Please check your credentials and try again.';
-    return rejectWithValue(message);
+  } catch (error: unknown) {
+    // Extract validation errors from GraphQL response
+    let userMessage =
+      'Unable to sign in. Please check your email and password.';
+
+    const err = error as {
+      graphQLErrors?: Array<{ message?: string }>;
+      networkError?: { result?: { errors?: Array<{ message?: string }> } };
+      message?: string;
+    };
+
+    // Try to get the GraphQL validation error message
+    if (err?.graphQLErrors?.length && err.graphQLErrors[0]?.message) {
+      userMessage = err.graphQLErrors[0].message;
+    } else if (err?.networkError?.result?.errors?.length) {
+      userMessage = err.networkError.result.errors[0].message || userMessage;
+    } else if (
+      err?.message &&
+      !err.message.includes('400') &&
+      !err.message.includes('successful')
+    ) {
+      userMessage = err.message;
+    }
+
+    return rejectWithValue(userMessage);
   }
 });
 
@@ -167,11 +187,31 @@ export const registerUser = createAsyncThunk<
     }
 
     return undefined;
-  } catch (error) {
-    const message =
-      (error as Error).message ??
-      'Unable to complete registration. Please try again.';
-    return rejectWithValue(message);
+  } catch (error: unknown) {
+    // Extract validation errors from GraphQL response
+    let userMessage =
+      'Unable to create your account. Please check your information and try again.';
+
+    const err = error as {
+      graphQLErrors?: Array<{ message?: string }>;
+      networkError?: { result?: { errors?: Array<{ message?: string }> } };
+      message?: string;
+    };
+
+    // Try to get the GraphQL validation error message
+    if (err?.graphQLErrors?.length && err.graphQLErrors[0]?.message) {
+      userMessage = err.graphQLErrors[0].message;
+    } else if (err?.networkError?.result?.errors?.length) {
+      userMessage = err.networkError.result.errors[0].message || userMessage;
+    } else if (
+      err?.message &&
+      !err.message.includes('400') &&
+      !err.message.includes('successful')
+    ) {
+      userMessage = err.message;
+    }
+
+    return rejectWithValue(userMessage);
   }
 });
 

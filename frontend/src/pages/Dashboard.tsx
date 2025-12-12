@@ -3,6 +3,7 @@ import { Navigate, useNavigate } from 'react-router-dom';
 import { useAppSelector, useAppDispatch } from '../store';
 import { fetchUserStatistics } from '../store/slices/statisticsSlice';
 import { setDashboardEncouragement } from '../store/slices/formSlice';
+import { logout } from '../store/slices/authSlice';
 
 type Category = {
   key: 'geometry' | 'algebra' | 'arithmetic' | 'wordProblem';
@@ -60,11 +61,18 @@ const Dashboard: React.FC = () => {
     }
   }, [isAuthenticated, dispatch]);
 
-  const error = statsError
-    ? statsError.includes('401')
-      ? 'Your session has expired. Redirecting to login...'
-      : 'Unable to load statistics. Please try again later.'
-    : null;
+  // Handle 401 errors - logout and redirect once
+  useEffect(() => {
+    if (statsError?.includes('401') && isAuthenticated) {
+      dispatch(logout());
+      navigate('/login', { replace: true });
+    }
+  }, [statsError, isAuthenticated, dispatch, navigate]);
+
+  const error =
+    statsError && !statsError.includes('401')
+      ? 'Unable to load statistics. Please try again later.'
+      : null;
 
   if (!isAuthenticated || !user) {
     return <Navigate to="/login" replace />;

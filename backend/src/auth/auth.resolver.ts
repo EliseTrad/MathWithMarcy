@@ -1,6 +1,7 @@
 import { Args, Mutation, Resolver } from '@nestjs/graphql';
 import { AuthService } from './auth.service';
-import { AuthResponse, UserType } from './auth.types';
+import { AuthResponse } from './auth.types';
+import { UserType } from '../users/users.types';
 import { LoginInput, RegisterInput } from './auth.inputs';
 import { ApiTags, ApiOperation } from '@nestjs/swagger';
 

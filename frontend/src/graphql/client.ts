@@ -23,7 +23,7 @@ const resolveGraphQLUrl = (): string => {
   const baseUrl =
     metaEnv?.VITE_API_URL ??
     metaEnv?.REACT_APP_API_URL ??
-    'http://localhost:3001';
+    'http://localhost:3000';
 
   return `${baseUrl}/graphql`;
 };

@@ -55,6 +55,19 @@ const Header: React.FC = () => {
             </li>
             <li className="nav-item mx-1">
               <NavLink
+                to="/ai-assistant"
+                className={({ isActive }) =>
+                  `nav-link px-3 py-2 rounded-pill ${
+                    isActive ? 'bg-danger text-white' : 'text-danger'
+                  }`
+                }
+                style={{ fontWeight: 500, transition: 'all 0.3s' }}
+              >
+                Chat with Marcy
+              </NavLink>
+            </li>
+            <li className="nav-item mx-1">
+              <NavLink
                 to="/questions"
                 className={({ isActive }) =>
                   `nav-link px-3 py-2 rounded-pill ${

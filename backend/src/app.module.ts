@@ -6,6 +6,7 @@ import { GraphQLModule } from '@nestjs/graphql';
 import { ApolloDriver, ApolloDriverConfig } from '@nestjs/apollo';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { CommonModule } from './common/common.module';
+import { AiAssistantModule } from './ai-assistant/ai-assistant.module';
 import { UsersModule } from './users/users.module';
 import { AuthModule } from './auth/auth.module';
 import { QuestionsModule } from './questions/questions.module';
@@ -87,6 +88,7 @@ import { UserAnswer } from './user-answers/user-answer.entity';
     AuthModule,
     QuestionsModule,
     UserAnswersModule,
+    AiAssistantModule,
   ],
   providers: [],
 })

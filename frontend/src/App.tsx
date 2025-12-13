@@ -8,6 +8,7 @@ import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
 import Profile from './pages/Profile';
 import Questions from './pages/Questions';
+import AIAssistantPage from './pages/AIAssistant';
 
 /**
  * Root application component with routing.
@@ -33,6 +34,7 @@ const App: React.FC = () => {
           <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/questions" element={<Questions />} />
+          <Route path="/ai-assistant" element={<AIAssistantPage />} />
         </Route>
       </Routes>
     </BrowserRouter>

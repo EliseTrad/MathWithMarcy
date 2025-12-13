@@ -14,6 +14,62 @@ detailed statistics.
 - GraphQL API with Swagger UI and GraphQL Playground
 - Modern, responsive UI with Bootstrap 5
 
+## 🤖 AI Math Assistant
+
+MathWithMarcy includes an integrated AI Math Assistant powered by
+retrieval-augmented generation (RAG) and a modern language model. The assistant
+can:
+
+- Answer math questions step by step, using both its own reasoning and a
+  knowledge base of solved problems.
+- Retrieve similar questions from the knowledge base to provide contextually
+  relevant, accurate answers.
+- Respond to user queries in a friendly, conversational manner.
+
+**How to use:**
+
+- Log in to the app and click "Chat with Marcy" in the navigation bar.
+- Type your math question and Marcy will provide a step-by-step solution or
+  helpful guidance.
+- If Marcy doesn't know the answer, she'll encourage you to try another math
+  question!
+
+The AI assistant is designed to help students learn by example and get instant,
+personalized math help.
+## 🧑‍💻 AI Assistant Setup (Google Colab & Hugging Face)
+
+To enable the AI Math Assistant, you need to run the LLM and retrieval backend
+in Google Colab using Hugging Face models. This powers Marcy's step-by-step math
+answers.
+
+### How to set up:
+
+1. **Open the Colab notebook:** - Use the provided
+   `MathWithMarcy_Colab_Setup.ipynb` notebook in `backend/src/ai-assistant/`.
+2. **Install dependencies:** - Run the first cell to install all required Python
+   packages (transformers, sentence-transformers, faiss-cpu, langchain,
+   huggingface_hub, bitsandbytes).
+3. **Authenticate with Hugging Face:** - Enter your Hugging Face token in the
+   login cell to access gated models (e.g., Llama, TinyLlama).
+4. **Load models:** - The notebook loads a small, fast chat model (e.g.,
+   TinyLlama) and an embedding model for retrieval.
+5. **Upload your knowledge base:** - Upload your `questions.csv` file when
+   prompted. The notebook will embed and index your questions for retrieval.
+6. **Test the assistant:** - Run the test cells to ensure Marcy can answer math
+   questions step by step.
+
+### Notes:
+
+- You must keep the Colab notebook running for the AI assistant to work.
+- The backend can be extended to call the Colab notebook via an API or use a
+  local Python server for production.
+- For best results, use a GPU runtime in Colab and keep prompts short for fast
+  responses.
+
+This setup allows you to leverage state-of-the-art LLMs and retrieval-augmented
+generation for instant math help in your app!
+
+
 **Topics:** Geometry, Arithmetic, Algebra, Word Problems  
 **Difficulty Levels:** Easy, Medium, Hard
 
